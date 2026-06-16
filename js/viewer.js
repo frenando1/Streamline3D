@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import * as V from './view.js'
+import { obterArquivoModelo } from './model.js'
 
 window.THREE = THREE
 
@@ -205,26 +206,31 @@ export async function openViewer3D(model) {
   isOpen = true
   await initViewer()
 
-  if (model.importedFile) {
-    const ext = model.importedFile.name.split('.').pop().toLowerCase()
+  let file = model.importedFile
+  if (!file && model.storagePath) {
+    V.showToast('Baixando arquivo do servidor...', 'info')
+    file = await obterArquivoModelo(model)
+  }
+  if (file) {
+    const ext = file.name.split('.').pop().toLowerCase()
     let loadedScene = null
 
     try {
       V.loadingEl.classList.remove('hidden')
 
       if (ext === 'gltf' || ext === 'glb') {
-        const url = URL.createObjectURL(model.importedFile)
+        const url = URL.createObjectURL(file)
         const gltf = await new GLTFLoader().loadAsync(url)
         URL.revokeObjectURL(url)
         loadedScene = gltf.scene
       } else if (ext === 'obj') {
         const { OBJLoader } = await import('three/addons/loaders/OBJLoader.js')
-        const url = URL.createObjectURL(model.importedFile)
+        const url = URL.createObjectURL(file)
         loadedScene = await new OBJLoader().loadAsync(url)
         URL.revokeObjectURL(url)
       } else if (ext === 'fbx') {
         const { FBXLoader } = await import('three/addons/loaders/FBXLoader.js')
-        const url = URL.createObjectURL(model.importedFile)
+        const url = URL.createObjectURL(file)
         loadedScene = await new FBXLoader().loadAsync(url)
         URL.revokeObjectURL(url)
       }

@@ -34,9 +34,9 @@ function renderGrid(data) {
         },
       })
       const convertItem = V.ctxMenu.querySelector('.ctx-item[data-action="convert"]')
-      if (convertItem) convertItem.classList.toggle('show', model.formato === '.blend' && !!model.importedFile)
+      if (convertItem) convertItem.classList.toggle('show', model.formato === '.blend' && (!!model.importedFile || !!model.storagePath))
       const downloadItem = V.ctxMenu.querySelector('.ctx-item[data-action="download"]')
-      if (downloadItem) downloadItem.classList.toggle('show', !!model.importedFile)
+      if (downloadItem) downloadItem.classList.toggle('show', !!model.importedFile || !!model.storagePath)
       const x = Math.min(e.clientX, innerWidth - 160)
       const y = Math.min(e.clientY, innerHeight - 100)
       V.ctxMenu.style.left = x + 'px'
@@ -90,7 +90,12 @@ function confirmImport() {
 }
 
 async function convertBlendToGLTF(model) {
-  if (!model || !model.importedFile) {
+  let blendFile = model.importedFile
+  if (!blendFile && model.storagePath) {
+    V.showToast('Baixando arquivo do servidor...', 'info')
+    blendFile = await M.obterArquivoModelo(model)
+  }
+  if (!model || !blendFile) {
     V.showToast('Arquivo .blend original não encontrado', 'error')
     return
   }
@@ -110,7 +115,7 @@ async function convertBlendToGLTF(model) {
 
   try {
     const formData = new FormData()
-    formData.append('blend', model.importedFile)
+    formData.append('blend', blendFile)
     formData.append('blenderPath', blender.caminho)
 
     const res = await fetch('http://localhost:3000/api/converter', {
@@ -178,13 +183,18 @@ pause`
   V.showToast(`Script .bat gerado para abrir em ${program.nome}`)
 }
 
-function downloadModelFile(model) {
-  if (!model.importedFile) {
+async function downloadModelFile(model) {
+  let file = model.importedFile
+  if (!file && model.storagePath) {
+    V.showToast('Baixando arquivo do servidor...', 'info')
+    file = await M.obterArquivoModelo(model)
+  }
+  if (!file) {
     V.showToast('Arquivo não disponível para download', 'error')
     return
   }
   const ext = model.formato.startsWith('.') ? model.formato : '.' + model.formato
-  const url = URL.createObjectURL(model.importedFile)
+  const url = URL.createObjectURL(file)
   const link = document.createElement('a')
   link.href = url
   link.download = model.nome + ext
@@ -206,14 +216,14 @@ V.ctxOverlay.addEventListener('click', () => {
 })
 
 document.querySelectorAll('#contextMenu .ctx-item[data-action]').forEach(item => {
-  item.addEventListener('click', () => {
+  item.addEventListener('click', async () => {
     if (!ctxModel) return
     if (item.dataset.action === 'view') openViewer3D(ctxModel)
-    if (item.dataset.action === 'convert') convertBlendToGLTF(ctxModel)
-    if (item.dataset.action === 'download') downloadModelFile(ctxModel)
+    if (item.dataset.action === 'convert') await convertBlendToGLTF(ctxModel)
+    if (item.dataset.action === 'download') await downloadModelFile(ctxModel)
     if (item.dataset.action === 'delete') {
       if (confirm(`Excluir "${ctxModel.nome}"?`)) {
-        M.deletarModelo(ctxModel.id).catch(e => V.showToast('Erro ao deletar: ' + e.message, 'error'))
+        M.deletarModelo(ctxModel).catch(e => V.showToast('Erro ao deletar: ' + e.message, 'error'))
         const i = M.models.indexOf(ctxModel)
         if (i > -1) M.models.splice(i, 1)
         applyFilters()
@@ -375,11 +385,11 @@ document.addEventListener('click', e => {
   }
 })
 
-V.toolDownload.addEventListener('click', () => {
-  if (viewerModel) downloadModelFile(viewerModel)
+V.toolDownload.addEventListener('click', async () => {
+  if (viewerModel) await downloadModelFile(viewerModel)
 })
-V.viewerConvertBtn.addEventListener('click', () => {
-  if (viewerModel && viewerModel.importedFile) convertBlendToGLTF(viewerModel)
+V.viewerConvertBtn.addEventListener('click', async () => {
+  if (viewerModel && (viewerModel.importedFile || viewerModel.storagePath)) await convertBlendToGLTF(viewerModel)
 })
 V.viewerConfigBtn.addEventListener('click', () => {
   closeModal()
