@@ -34,11 +34,36 @@ export const programName = document.getElementById('programName')
 export const programPath = document.getElementById('programPath')
 export const programBrowseBtn = document.getElementById('programBrowseBtn')
 export const programAddBtn = document.getElementById('programAddBtn')
+export const toolDownload = document.getElementById('toolDownload')
 export const toolOpenIn = document.getElementById('toolOpenIn')
 export const toolOpenInDropdown = document.getElementById('toolOpenInDropdown')
 export const toolOpenInList = document.getElementById('toolOpenInList')
 export const viewerConvertBtn = document.getElementById('viewerConvertBtn')
 export const viewerConfigBtn = document.getElementById('viewerConfigBtn')
+export const loginDialogOverlay = document.getElementById('loginDialogOverlay')
+export const loginDialogTitle = document.getElementById('loginDialogTitle')
+export const loginUsernameField = document.getElementById('loginUsernameField')
+export const loginUsername = document.getElementById('loginUsername')
+export const loginEmail = document.getElementById('loginEmail')
+export const loginPassword = document.getElementById('loginPassword')
+export const loginError = document.getElementById('loginError')
+export const loginCancel = document.getElementById('loginCancel')
+export const loginConfirm = document.getElementById('loginConfirm')
+export const loginClose = document.getElementById('loginClose')
+export const loginToggleMode = document.getElementById('loginToggleMode')
+export const loginBtn = document.getElementById('Login')
+export const settingsAccount = document.getElementById('settingsAccount')
+export const accountAvatar = document.getElementById('accountAvatar')
+export const accountName = document.getElementById('accountName')
+export const accountEmail = document.getElementById('accountEmail')
+export const accountNameInput = document.getElementById('accountNameInput')
+export const accountEmailInput = document.getElementById('accountEmailInput')
+export const accountPasswordInput = document.getElementById('accountPasswordInput')
+export const accountSaveBtn = document.getElementById('accountSaveBtn')
+export const accountLogoutBtn = document.getElementById('accountLogoutBtn')
+export const exportTxtBtn = document.getElementById('exportTxtBtn')
+export const importTxtBtn = document.getElementById('importTxtBtn')
+export const importTxtInput = document.getElementById('importTxtInput')
 
 function escapeHtml(str) {
   const div = document.createElement('div')
@@ -223,6 +248,78 @@ export function openImportDialog(file, categories) {
 
 export function closeImportDialog() {
   importDialogOverlay.classList.remove('active')
+}
+
+let loginMode = 'login'
+
+export function openLoginDialog(mode) {
+  loginMode = mode || 'login'
+  renderLoginMode()
+  loginDialogOverlay.classList.add('active')
+  setTimeout(() => loginEmail.focus(), 100)
+}
+
+function renderLoginMode() {
+  const isRegister = loginMode === 'register'
+  loginDialogTitle.textContent = isRegister ? 'Criar Conta' : 'Entrar'
+  loginConfirm.textContent = isRegister ? 'Criar Conta' : 'Entrar'
+  loginToggleMode.textContent = isRegister ? 'Já tenho conta' : 'Criar conta'
+  loginUsernameField.style.display = isRegister ? '' : 'none'
+  if (!isRegister) loginUsername.value = ''
+  loginError.style.display = 'none'
+}
+
+export function toggleLoginMode() {
+  loginMode = loginMode === 'login' ? 'register' : 'login'
+  renderLoginMode()
+}
+
+export function isRegisterMode() {
+  return loginMode === 'register'
+}
+
+export function showLoginError(msg) {
+  loginError.textContent = msg
+  loginError.style.display = ''
+}
+
+export function hideLoginError() {
+  loginError.style.display = 'none'
+}
+
+export function closeLoginDialog() {
+  loginDialogOverlay.classList.remove('active')
+  loginEmail.value = ''
+  loginPassword.value = ''
+  loginUsername.value = ''
+  loginError.style.display = 'none'
+  loginMode = 'login'
+}
+
+export function updateLoginUI(user) {
+  if (user) {
+    const initial = user.name.charAt(0).toUpperCase()
+    loginBtn.textContent = initial
+    loginBtn.title = `${user.email} — Configurações da conta`
+  } else {
+    loginBtn.textContent = '👤'
+    loginBtn.title = 'Login'
+  }
+}
+
+export function renderAccountSettings(user) {
+  if (!user) {
+    settingsAccount.classList.remove('active')
+    return
+  }
+  const initial = user.name.charAt(0).toUpperCase()
+  accountAvatar.textContent = initial
+  accountName.textContent = user.name
+  accountEmail.textContent = user.email
+  accountNameInput.value = user.name
+  accountEmailInput.value = user.email
+  accountPasswordInput.value = ''
+  settingsAccount.classList.add('active')
 }
 
 export function closeOpenInDropdown() {

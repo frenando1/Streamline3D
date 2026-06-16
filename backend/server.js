@@ -11,7 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = join(__filename, '..');
 
 const app = express();
-const PORT = 3000;
+const PORT = 3001;
 
 app.use(cors({
   origin: true,

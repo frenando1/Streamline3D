@@ -50,13 +50,17 @@ body {
 }
 
   #sidebar .logo {
-    font-size: 16px;
-    font-weight: 700;
-    letter-spacing: -0.3px;
-    padding: 0 10px 20px;
-    color: var(--text);
+    padding: 10px 10px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  #sidebar .logo span { color: var(--accent); }
+  #sidebar .logo img {
+    width: 100%;
+    height: auto;
+    max-height: 100px;
+    object-fit: contain;
+  }
 
   .cat-item {
     display: flex;
@@ -658,11 +662,14 @@ body {
     margin-top: 2px;
   }
 
-  #importDialog .field {
+  #importDialog .field,
+  #settingsPanel .field {
     margin-bottom: 14px;
   }
-  #importDialog .field:last-of-type { margin-bottom: 0; }
-  #importDialog .field label {
+  #importDialog .field:last-of-type,
+  #settingsPanel .field:last-of-type { margin-bottom: 0; }
+  #importDialog .field label,
+  #settingsPanel .field label {
     display: block;
     font-size: 11px;
     font-weight: 600;
@@ -672,7 +679,8 @@ body {
     margin-bottom: 5px;
   }
   #importDialog .field input,
-  #importDialog .field select {
+  #importDialog .field select,
+  #settingsPanel .field input {
     width: 100%;
     padding: 9px 12px;
     font-family: var(--font);
@@ -686,10 +694,12 @@ body {
     transition: border-color var(--transition);
   }
   #importDialog .field input:focus,
-  #importDialog .field select:focus {
+  #importDialog .field select:focus,
+  #settingsPanel .field input:focus {
     border-color: var(--accent);
   }
-  #importDialog .field input::placeholder {
+  #importDialog .field input::placeholder,
+  #settingsPanel .field input::placeholder {
     color: var(--text-ter);
   }
   #importDialog .field select {
@@ -729,6 +739,135 @@ body {
     color: #fff;
   }
   #importDialog .dialog-actions #dialogConfirm:hover { background: #7F6FF0; transform: scale(1.03); }
+
+#loginDialogOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+#loginDialogOverlay.active { opacity: 1; visibility: visible; }
+
+  #loginDialog {
+    background: #1a1a20;
+    border: var(--border);
+    border-radius: var(--radius-lg);
+    width: min(92vw, 380px);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+    transform: scale(0.92) translateY(12px);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  #loginDialogOverlay.active #loginDialog { transform: scale(1) translateY(0); }
+
+  #loginDialog .dialog-header {
+    padding: 20px 24px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  #loginDialog .dialog-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  #loginDialog .dialog-header .dialog-close {
+    background: none;
+    border: none;
+    color: var(--text-ter);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+    transition: color var(--transition), background var(--transition);
+  }
+  #loginDialog .dialog-header .dialog-close:hover {
+    color: var(--text);
+    background: var(--bg-hover);
+  }
+
+  #loginDialog .dialog-body {
+    padding: 16px 24px 20px;
+  }
+
+  #loginDialog .field {
+    margin-bottom: 14px;
+  }
+  #loginDialog .field:last-of-type { margin-bottom: 0; }
+  #loginDialog .field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-ter);
+    margin-bottom: 5px;
+  }
+  #loginDialog .field input {
+    width: 100%;
+    padding: 9px 12px;
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.04);
+    border: var(--border);
+    border-radius: 8px;
+    outline: none;
+    transition: border-color var(--transition);
+  }
+  #loginDialog .field input:focus {
+    border-color: var(--accent);
+  }
+  #loginDialog .field input::placeholder {
+    color: var(--text-ter);
+  }
+
+  #loginDialog .dialog-actions {
+    display: flex;
+    gap: 8px;
+    padding: 0 24px 20px;
+    justify-content: flex-end;
+  }
+  #loginDialog .dialog-actions button {
+    padding: 8px 20px;
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background var(--transition), transform var(--transition);
+  }
+  #loginDialog .dialog-actions #loginCancel {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-sec);
+  }
+  #loginDialog .dialog-actions #loginCancel:hover { background: rgba(255, 255, 255, 0.1); }
+  #loginDialog .dialog-actions #loginConfirm {
+    background: var(--accent);
+    color: #fff;
+  }
+  #loginDialog .dialog-actions #loginConfirm:hover { background: #7F6FF0; transform: scale(1.03); }
+  #loginDialog .dialog-actions .btn-link {
+    background: none; border: none; color: var(--accent);
+    padding: 8px 12px; font-family: var(--font); font-size: 12px;
+    font-weight: 600; cursor: pointer; margin-right: auto;
+    transition: opacity var(--transition);
+  }
+  #loginDialog .dialog-actions .btn-link:hover { opacity: 0.8; }
+  #loginDialog .login-error {
+    padding: 8px 12px; background: rgba(231, 76, 60, 0.1);
+    border: 1px solid rgba(231, 76, 60, 0.3); border-radius: 8px;
+    color: #e74c3c; font-size: 12px; font-weight: 500; margin-top: 8px;
+  }
 
 #settingsOverlay {
   position: fixed;
@@ -960,6 +1099,82 @@ body {
   transform: none;
 }
 
+#settingsPanel .settings-account { display: none; }
+#settingsPanel .settings-account.active { display: block; }
+
+#settingsPanel .account-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: var(--bg-hover);
+  border-radius: var(--radius);
+  border: var(--border);
+}
+
+#settingsPanel .account-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+#settingsPanel .account-details {
+  flex: 1;
+  min-width: 0;
+}
+#settingsPanel .account-details .account-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+#settingsPanel .account-details .account-email {
+  font-size: 12px;
+  color: var(--text-sec);
+  margin-top: 2px;
+  word-break: break-all;
+}
+
+#settingsPanel .account-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+#settingsPanel .account-actions .settings-btn {
+  flex: 1;
+  padding: 9px 16px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background var(--transition), transform var(--transition);
+}
+#settingsPanel .account-actions .settings-btn.primary {
+  background: var(--accent);
+  color: #fff;
+}
+#settingsPanel .account-actions .settings-btn.primary:hover {
+  background: #7F6FF0;
+  transform: scale(1.03);
+}
+#settingsPanel .account-actions .settings-btn.danger {
+  background: rgba(231, 76, 60, 0.12);
+  color: #e74c3c;
+}
+#settingsPanel .account-actions .settings-btn.danger:hover {
+  background: rgba(231, 76, 60, 0.2);
+}
+
 @media (max-width: 768px) {
   #settingsPanel {
     width: 100vw;
@@ -997,8 +1212,7 @@ body {
 
 @media (max-width: 768px) {
   #sidebar { width: 56px; min-width: 56px; padding: 12px 8px; }
-  #sidebar .logo { padding: 0 4px 16px; font-size: 0; }
-  #sidebar .logo::first-letter { font-size: 16px; }
+  #sidebar .logo { padding: 0 4px 16px; }
   .cat-item { padding: 7px; justify-content: center; }
   .cat-item span:not(.dot) { display: none; }
   .cat-item .count { display: none; }
