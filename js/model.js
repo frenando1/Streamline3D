@@ -172,6 +172,7 @@ export async function carregarModelos() {
       disponivelDownload: row.disponivel_download,
       animacao: row.animacao,
       thumbnailGrad: row.thumbnail_grad,
+      storagePath: row.storage_path,
       importedFile: null,
     })
   }
@@ -179,6 +180,14 @@ export async function carregarModelos() {
 
 export async function salvarModelo(model) {
   if (!currentUser) return
+  let storagePath = null
+  if (model.importedFile) {
+    storagePath = `${currentUser.id}/${model.id}/${model.importedFile.name}`
+    const { error: upErr } = await supabase.storage
+      .from('modelos')
+      .upload(storagePath, model.importedFile, { upsert: true })
+    if (upErr) console.warn('Erro ao enviar arquivo:', upErr.message)
+  }
   const { error } = await supabase.from('assets').insert({
     id: model.id,
     user_id: currentUser.id,
@@ -190,12 +199,22 @@ export async function salvarModelo(model) {
     disponivel_download: model.disponivelDownload,
     animacao: model.animacao,
     thumbnail_grad: model.thumbnailGrad,
+    storage_path: storagePath,
   })
   if (error) throw error
+  model.storagePath = storagePath
 }
 
 export async function atualizarModelo(model) {
   if (!currentUser) return
+  let storagePath = model.storagePath
+  if (model.importedFile) {
+    storagePath = `${currentUser.id}/${model.id}/${model.importedFile.name}`
+    const { error: upErr } = await supabase.storage
+      .from('modelos')
+      .upload(storagePath, model.importedFile, { upsert: true })
+    if (upErr) console.warn('Erro ao enviar arquivo:', upErr.message)
+  }
   const { error } = await supabase
     .from('assets')
     .update({
@@ -204,20 +223,41 @@ export async function atualizarModelo(model) {
       disponivel_download: model.disponivelDownload,
       animacao: model.animacao,
       thumbnail_grad: model.thumbnailGrad,
+      storage_path: storagePath,
     })
+    .eq('id', model.id)
+    .eq('user_id', currentUser.id)
+  if (error) throw error
+  model.storagePath = storagePath
+}
+
+export async function deletarModelo(model) {
+  if (!currentUser) return
+  if (model.storagePath) {
+    const { error: rmErr } = await supabase.storage
+      .from('modelos')
+      .remove([model.storagePath])
+    if (rmErr) console.warn('Erro ao remover arquivo:', rmErr.message)
+  }
+  const { error } = await supabase
+    .from('assets')
+    .delete()
     .eq('id', model.id)
     .eq('user_id', currentUser.id)
   if (error) throw error
 }
 
-export async function deletarModelo(id) {
-  if (!currentUser) return
-  const { error } = await supabase
-    .from('assets')
-    .delete()
-    .eq('id', id)
-    .eq('user_id', currentUser.id)
-  if (error) throw error
+export async function obterArquivoModelo(model) {
+  if (model.importedFile) return model.importedFile
+  if (!model.storagePath) return null
+  const { data, error } = await supabase.storage
+    .from('modelos')
+    .download(model.storagePath)
+  if (error || !data) return null
+  const name = model.storagePath.split('/').pop()
+  const ext = model.formato.startsWith('.') ? model.formato : '.' + model.formato
+  model.importedFile = new File([data], name || model.nome + ext)
+  return model.importedFile
 }
 
 // === Export/Import para modelos.txt ===
