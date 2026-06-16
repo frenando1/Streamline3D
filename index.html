@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Streamline 3D — Gerenciador de Assets</title>
+  <link rel="icon" type="image/png" href="img/Gemini_Generated_Image_7z15la7z15la7z15-removebg-preview - Copia.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -11,7 +12,8 @@
   {
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+      "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2"
     }
   }
   </script>
@@ -21,7 +23,9 @@
 
   <div id="app">
     <aside id="sidebar">
-      <div class="logo">Stream<span>line</span> 3D</div>
+      <div class="logo">
+        <img src="img/Gemini_Generated_Image_7z15la7z15la7z15-removebg-preview.png" alt="Streamline 3D Logo">
+      </div>
       <div id="categoryList"></div>
     </aside>
 
@@ -54,6 +58,7 @@
           </select>
         </div>
         <div class="toolbar">
+          <button id="Login" title="Login">👤</button>  
           <button id="settingsBtn" title="Configurações">⚙</button>
           <button id="themeToggle" title="Alternar tema">🌙</button>
         </div>
@@ -82,6 +87,10 @@
       <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       <span>Converter para glTF</span>
     </div>
+    <div class="ctx-item" data-action="download">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <span>Download</span>
+    </div>
     <div class="ctx-divider"></div>
     <div class="ctx-item danger" data-action="delete">
       <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
@@ -95,6 +104,9 @@
         <button id="closeBtn">✕</button>
 
         <div id="toolbarModal">
+          <button id="toolDownload" title="Download">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </button>
           <button id="toolOpenIn" title="Abrir em programa externo">
             <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </button>
@@ -172,6 +184,41 @@
         <button id="settingsClose">✕</button>
       </div>
       <div class="settings-body">
+        <div class="settings-section settings-account" id="settingsAccount">
+          <h4>Minha Conta</h4>
+          <div class="account-info">
+            <div class="account-avatar" id="accountAvatar">J</div>
+            <div class="account-details">
+              <div class="account-name" id="accountName">João</div>
+              <div class="account-email" id="accountEmail">joao@email.com</div>
+            </div>
+          </div>
+          <div class="field">
+            <label for="accountNameInput">Nome</label>
+            <input type="text" id="accountNameInput" />
+          </div>
+          <div class="field">
+            <label for="accountEmailInput">E-mail</label>
+            <input type="email" id="accountEmailInput" />
+          </div>
+          <div class="field">
+            <label for="accountPasswordInput">Nova senha</label>
+            <input type="password" id="accountPasswordInput" placeholder="Deixe em branco para manter" />
+          </div>
+          <div class="account-actions">
+            <button id="accountSaveBtn" class="settings-btn primary">Salvar</button>
+            <button id="accountLogoutBtn" class="settings-btn danger">Sair da conta</button>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h4>Backup de Modelos</h4>
+          <p class="setting-note">Exporte e importe modelos com arquivos binários em Base64.</p>
+          <div class="backup-actions">
+            <button id="exportTxtBtn" class="settings-btn primary">Exportar modelos.txt</button>
+            <button id="importTxtBtn" class="settings-btn">Importar modelos.txt</button>
+          </div>
+          <input type="file" id="importTxtInput" hidden accept=".txt" />
+        </div>
         <div class="settings-section settings-external">
           <h4>Programas 3D Externos</h4>
           <p class="setting-note">Configure programas 3D para abrir assets diretamente.</p>
@@ -189,8 +236,37 @@
     </div>
   </div>
 
-  <div id="toast"></div>
+  <div id="loginDialogOverlay">
+    <div id="loginDialog">
+      <div class="dialog-header">
+        <h3 id="loginDialogTitle">Entrar</h3>
+        <button id="loginClose" class="dialog-close">✕</button>
+      </div>
+      <div class="dialog-body">
+        <div class="field" id="loginUsernameField" style="display:none">
+          <label for="loginUsername">Nome de usuário</label>
+          <input type="text" id="loginUsername" placeholder="Seu nome" />
+        </div>
+        <div class="field">
+          <label for="loginEmail">E-mail</label>
+          <input type="email" id="loginEmail" placeholder="seu@email.com" />
+        </div>
+        <div class="field">
+          <label for="loginPassword">Senha</label>
+          <input type="password" id="loginPassword" placeholder="••••••••" />
+        </div>
+        <div id="loginError" class="login-error" style="display:none"></div>
+      </div>
+      <div class="dialog-actions">
+        <button id="loginCancel">Cancelar</button>
+        <button id="loginToggleMode" class="btn-link">Criar conta</button>
+        <button id="loginConfirm">Entrar</button>
+      </div>
+    </div>
+  </div>
 
+  <div id="toast"></div>
+ 
   <script type="module" src="js/controller.js"></script>
 </body>
 </html>
