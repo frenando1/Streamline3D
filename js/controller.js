@@ -1,308 +1,354 @@
-import * as M from './model.js'
-import * as V from './view.js'
-import { openViewer3D, closeModal, viewerModel } from './viewer.js'
+import { Model } from './model.js'
+import { View } from './view.js'
+import { openViewer3D, closeModal, viewerModel } from './view.js'
 
-let ctxModel = null
-let pendingFile = null
+const Controller = {
+  ctxModel: null,
+  pendingFile: null,
 
-function applyFilters() {
-  const cat = V.filterCategoria.value
-  const lic = V.filterLicenca.value
-  const fmt = V.filterFormato.value
-  const outros = V.filterOutros.value
+  applyFilters() {
+    const cat = View.el.filterCategoria.value
+    const lic = View.el.filterLicenca.value
+    const fmt = View.el.filterFormato.value
+    const outros = View.el.filterOutros.value
 
-  const filtrados = M.models.filter(m => {
-    if (cat !== 'todas' && m.categoria !== cat) return false
-    if (lic !== 'todas' && m.licenca !== lic) return false
-    if (fmt !== 'todos' && m.formato !== fmt) return false
-    if (outros === 'download' && !m.disponivelDownload) return false
-    if (outros === 'animacao' && !m.animacao) return false
-    return true
-  })
-  renderGrid(filtrados)
-}
-
-function renderGrid(data) {
-  V.renderGrid(data, {
-    onMenuClick: (model, e) => {
-      ctxModel = model
-      V.updateContextMenuPrograms(M.externalPrograms, V.ctxOverlay, V.ctxMenu, {
-        onSelect: (prog) => {
-          if (!ctxModel) return
-          generateOpenScript(prog, ctxModel)
-          ctxModel = null
-        },
-      })
-      const convertItem = V.ctxMenu.querySelector('.ctx-item[data-action="convert"]')
-      if (convertItem) convertItem.classList.toggle('show', model.formato === '.blend' && (!!model.importedFile || !!model.storagePath))
-      const downloadItem = V.ctxMenu.querySelector('.ctx-item[data-action="download"]')
-      if (downloadItem) downloadItem.classList.toggle('show', !!model.importedFile || !!model.storagePath)
-      const x = Math.min(e.clientX, innerWidth - 160)
-      const y = Math.min(e.clientY, innerHeight - 100)
-      V.ctxMenu.style.left = x + 'px'
-      V.ctxMenu.style.top = y + 'px'
-      V.ctxOverlay.classList.add('active')
-      V.ctxMenu.classList.add('active')
-    },
-    onCardClick: (model) => openViewer3D(model),
-  })
-}
-
-function confirmImport() {
-  if (!pendingFile) return
-  const name = V.dialogName.value.trim() || 'Sem nome'
-  const cat = V.dialogCategory.value
-  const lic = V.dialogLicense.value
-  const parts = pendingFile.name.split('.')
-  const ext = '.' + parts.pop().toLowerCase()
-  const grad = M.thumbnailGradients[M.models.length % M.thumbnailGradients.length]
-
-  const model = {
-    id: Date.now(),
-    nome: name,
-    autor: 'importado',
-    categoria: cat,
-    licenca: lic,
-    formato: ext,
-    disponivelDownload: true,
-    animacao: false,
-    thumbnailGrad: grad,
-    importedFile: pendingFile,
-  }
-
-  M.models.unshift(model)
-
-  if (M.currentUser) {
-    M.salvarModelo(model).catch(e => V.showToast('Erro ao salvar: ' + e.message, 'error'))
-  }
-
-  V.closeImportDialog()
-  pendingFile = null
-  V.filterCategoria.value = 'todas'
-  V.filterFormato.value = 'todos'
-  V.filterLicenca.value = 'todas'
-  V.filterOutros.value = 'todos'
-  applyFilters()
-  const ativa = document.querySelector('.cat-item.active')
-  V.renderSidebar(M.categories, M.models, ativa ? ativa.dataset.categoria : 'models')
-  V.showToast(`"${name}${ext}" importado com sucesso`)
-  document.getElementById('gridWrapper').scrollTop = 0
-}
-
-async function convertBlendToGLTF(model) {
-  let blendFile = model.importedFile
-  if (!blendFile && model.storagePath) {
-    V.showToast('Baixando arquivo do servidor...', 'info')
-    blendFile = await M.obterArquivoModelo(model)
-  }
-  if (!model || !blendFile) {
-    V.showToast('Arquivo .blend original não encontrado', 'error')
-    return
-  }
-
-  const blender = M.externalPrograms.find(p => p.nome.toLowerCase().includes('blender'))
-  if (!blender) {
-    V.showToast('Configure o Blender nas Configurações primeiro', 'error')
-    V.settingsBtn.click()
-    setTimeout(() => {
-      const section = document.querySelector('#settingsPanel .settings-external')
-      if (section) section.scrollIntoView({ behavior: 'smooth' })
-    }, 400)
-    return
-  }
-
-  V.showToast('Convertendo .blend para .glb…', 'loading')
-
-  try {
-    const formData = new FormData()
-    formData.append('blend', blendFile)
-    formData.append('blenderPath', blender.caminho)
-
-    const res = await fetch('http://localhost:3000/api/converter', {
-      method: 'POST',
-      body: formData,
+    const filtrados = Model.models.filter(m => {
+      if (cat !== 'todas' && m.categoria !== cat) return false
+      if (lic !== 'todas' && m.licenca !== lic) return false
+      if (fmt !== 'todos' && m.formato !== fmt) return false
+      if (outros === 'download' && !m.disponivelDownload) return false
+      if (outros === 'animacao' && !m.animacao) return false
+      return true
     })
+    Controller.renderGrid(filtrados)
+  },
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      V.showToast(err.error || 'Erro na conversão', 'error')
+  renderGrid(data) {
+    View.renderGrid(data, {
+      onMenuClick: (model, e) => {
+        Controller.ctxModel = model
+        View.updateContextMenuPrograms(Model.externalPrograms, View.el.ctxOverlay, View.el.ctxMenu, {
+          onSelect: (prog) => {
+            if (!Controller.ctxModel) return
+            Controller.generateOpenScript(prog, Controller.ctxModel)
+            Controller.ctxModel = null
+          },
+        })
+        const convertItem = View.el.ctxMenu.querySelector('.ctx-item[data-action="convert"]')
+        if (convertItem) convertItem.classList.toggle('show', model.formato === '.blend' && (!!model.importedFile || !!model.storagePath))
+        const downloadItem = View.el.ctxMenu.querySelector('.ctx-item[data-action="download"]')
+        if (downloadItem) downloadItem.classList.toggle('show', !!model.importedFile || !!model.storagePath)
+        const x = Math.min(e.clientX, innerWidth - 160)
+        const y = Math.min(e.clientY, innerHeight - 100)
+        View.el.ctxMenu.style.left = x + 'px'
+        View.el.ctxMenu.style.top = y + 'px'
+        View.el.ctxOverlay.classList.add('active')
+        View.el.ctxMenu.classList.add('active')
+      },
+      onCardClick: (model) => openViewer3D(model),
+    })
+  },
+
+  confirmImport() {
+    if (!Controller.pendingFile) return
+    const name = View.el.dialogName.value.trim() || 'Sem nome'
+    const cat = View.el.dialogCategory.value
+    const lic = View.el.dialogLicense.value
+    const parts = Controller.pendingFile.name.split('.')
+    const ext = '.' + parts.pop().toLowerCase()
+    const grad = Model.thumbnailGradients[Model.models.length % Model.thumbnailGradients.length]
+
+    const model = {
+      id: Date.now(),
+      nome: name,
+      autor: 'importado',
+      categoria: cat,
+      licenca: lic,
+      formato: ext,
+      disponivelDownload: true,
+      animacao: false,
+      thumbnailGrad: grad,
+      importedFile: Controller.pendingFile,
+    }
+
+    Model.models.unshift(model)
+
+    if (Model.currentUser) {
+      Model.salvarModelo(model).catch(e => View.showToast('Erro ao salvar: ' + e.message, 'error'))
+    }
+
+    View.closeImportDialog()
+    Controller.pendingFile = null
+    View.el.filterCategoria.value = 'todas'
+    View.el.filterFormato.value = 'todos'
+    View.el.filterLicenca.value = 'todas'
+    View.el.filterOutros.value = 'todos'
+    Controller.applyFilters()
+    const ativa = document.querySelector('.cat-item.active')
+    View.renderSidebar(Model.categories, Model.models, ativa ? ativa.dataset.categoria : 'models')
+    View.showToast(`"${name}${ext}" importado com sucesso`)
+    document.getElementById('gridWrapper').scrollTop = 0
+  },
+
+  async convertBlendToGLTF(model) {
+    let blendFile = model.importedFile
+    if (!blendFile && model.storagePath) {
+      View.showToast('Baixando arquivo do servidor...', 'info')
+      blendFile = await Model.obterArquivoModelo(model)
+    }
+    if (!model || !blendFile) {
+      View.showToast('Arquivo .blend original não encontrado', 'error')
       return
     }
 
-    const blob = await res.blob()
-    const baseName = model.nome.replace(/\.[^.]+$/, '')
-    const downloadName = baseName + '.glb'
-    const idx = M.models.indexOf(model)
-
-    model.nome = baseName
-    model.formato = '.glb'
-    model.disponivelDownload = true
-    model.animacao = false
-    model.thumbnailGrad = M.thumbnailGradients[(idx > -1 ? idx : M.models.length) % M.thumbnailGradients.length]
-    model.importedFile = new File([blob], downloadName, { type: 'model/gltf-binary' })
-
-    if (M.currentUser) {
-      M.atualizarModelo(model).catch(e => console.warn('Erro ao atualizar:', e.message))
+    const blender = Model.externalPrograms.find(p => p.nome.toLowerCase().includes('blender'))
+    if (!blender) {
+      View.showToast('Configure o Blender nas Configurações primeiro', 'error')
+      View.el.settingsBtn.click()
+      setTimeout(() => {
+        const section = document.querySelector('#settingsPanel .settings-external')
+        if (section) section.scrollIntoView({ behavior: 'smooth' })
+      }, 400)
+      return
     }
 
-    applyFilters()
-    const ativa = document.querySelector('.cat-item.active')
-    V.renderSidebar(M.categories, M.models, ativa ? ativa.dataset.categoria : 'models')
-    V.showToast(`${baseName} convertido para glTF com sucesso`)
-  } catch (err) {
-    console.error('Erro na conversão:', err)
-    V.showToast('Falha na conversão. Servidor rodando?', 'error')
-  }
-}
+    View.showToast('Convertendo .blend para .glb…', 'loading')
 
-function generateOpenScript(program, model) {
-  if (!model.importedFile) {
-    V.showToast('Asset não possui arquivo local para abrir', 'error')
-    return
-  }
+    try {
+      const formData = new FormData()
+      formData.append('blend', blendFile)
+      formData.append('blenderPath', blender.caminho)
 
-  const fileName = model.importedFile.name
-  const progPath = program.caminho
+      const res = await fetch('http://localhost:3000/api/converter', {
+        method: 'POST',
+        body: formData,
+      })
 
-  const batContent = `@echo off
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        View.showToast(err.error || 'Erro na conversão', 'error')
+        return
+      }
+
+      const blob = await res.blob()
+      const baseName = model.nome.replace(/\.[^.]+$/, '')
+      const downloadName = baseName + '.glb'
+      const idx = Model.models.indexOf(model)
+
+      model.nome = baseName
+      model.formato = '.glb'
+      model.disponivelDownload = true
+      model.animacao = false
+      model.thumbnailGrad = Model.thumbnailGradients[(idx > -1 ? idx : Model.models.length) % Model.thumbnailGradients.length]
+      model.importedFile = new File([blob], downloadName, { type: 'model/gltf-binary' })
+
+      if (Model.currentUser) {
+        Model.atualizarModelo(model).catch(e => console.warn('Erro ao atualizar:', e.message))
+      }
+
+      Controller.applyFilters()
+      const ativa = document.querySelector('.cat-item.active')
+      View.renderSidebar(Model.categories, Model.models, ativa ? ativa.dataset.categoria : 'models')
+      View.showToast(`${baseName} convertido para glTF com sucesso`)
+    } catch (err) {
+      console.error('Erro na conversão:', err)
+      View.showToast('Falha na conversão. Servidor rodando?', 'error')
+    }
+  },
+
+  generateOpenScript(program, model) {
+    if (!model.importedFile) {
+      View.showToast('Asset não possui arquivo local para abrir', 'error')
+      return
+    }
+
+    const fileName = model.importedFile.name
+    const progPath = program.caminho
+
+    const batContent = `@echo off
 echo Abrindo "${fileName}" em ${program.nome}...
 start "" "${progPath}" "${fileName}"
 echo.
 echo Se o programa nao abriu, verifique o caminho do executavel nas configuracoes.
 pause`
 
-  const blob = new Blob([batContent], { type: 'text/plain' })
-  const link = document.createElement('a')
-  link.href = URL.createObjectURL(blob)
-  link.download = `abrir_${program.nome.replace(/[^a-zA-Z0-9]/g, '_')}_${fileName.replace(/\.[^.]+$/, '')}.bat`
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(link.href)
+    const blob = new Blob([batContent], { type: 'text/plain' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `abrir_${program.nome.replace(/[^a-zA-Z0-9]/g, '_')}_${fileName.replace(/\.[^.]+$/, '')}.bat`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(link.href)
 
-  V.showToast(`Script .bat gerado para abrir em ${program.nome}`)
+    View.showToast(`Script .bat gerado para abrir em ${program.nome}`)
+  },
+
+  async downloadModelFile(model) {
+    let file = model.importedFile
+    if (!file && model.storagePath) {
+      View.showToast('Baixando arquivo do servidor...', 'info')
+      file = await Model.obterArquivoModelo(model)
+    }
+    if (!file) {
+      View.showToast('Arquivo não disponível para download', 'error')
+      return
+    }
+    const ext = model.formato.startsWith('.') ? model.formato : '.' + model.formato
+    const url = URL.createObjectURL(file)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = model.nome + ext
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  },
+
+  renderProgramListWithHandler() {
+    const handler = (index, prog) => {
+      Model.externalPrograms.splice(index, 1)
+      Model.salvarProgramas()
+      Controller.renderProgramListWithHandler()
+      View.showToast(`"${prog.nome}" removido`)
+      View.updateProgramAddBtn()
+    }
+    View.renderProgramList(Model.externalPrograms, { onRemove: handler })
+  },
+
+  tratarErroSupabase(err) {
+    const msg = err?.message || ''
+    if (msg.includes('Invalid login credentials')) return 'E-mail ou senha incorretos'
+    if (msg.includes('Email not confirmed')) return 'Confirme seu e-mail antes de entrar'
+    if (msg.includes('User already registered')) return 'Este e-mail já está cadastrado'
+    if (msg.includes('Password should be')) return 'Senha muito curta (mínimo 6 caracteres)'
+    return msg || 'Erro inesperado. Tente novamente.'
+  },
+
+  async init() {
+    Model.carregarConfig()
+    Model.carregarProgramas()
+    View.populateFilters(Model.categories)
+    View.renderSidebar(Model.categories, Model.models, 'models')
+    Controller.applyFilters()
+    Controller.renderProgramListWithHandler()
+    View.aplicarTema(Model.settings.theme)
+
+    try {
+      await Model.carregarSessao()
+    } catch (e) {
+      console.warn('Sessão não restaurada:', e.message)
+    }
+    View.updateLoginUI(Model.currentUser)
+
+    if (Model.currentUser) {
+      try {
+        await Model.carregarModelos()
+        Controller.applyFilters()
+        const ativa = document.querySelector('.cat-item.active')
+        View.renderSidebar(Model.categories, Model.models, ativa ? ativa.dataset.categoria : 'models')
+      } catch (e) {
+        console.warn('Modelos não carregados:', e.message)
+      }
+    }
+
+    Model.onAuthChange((user) => {
+      View.updateLoginUI(user)
+    })
+
+    console.log('✅ Streamline 3D carregado!')
+  },
 }
 
-async function downloadModelFile(model) {
-  let file = model.importedFile
-  if (!file && model.storagePath) {
-    V.showToast('Baixando arquivo do servidor...', 'info')
-    file = await M.obterArquivoModelo(model)
-  }
-  if (!file) {
-    V.showToast('Arquivo não disponível para download', 'error')
-    return
-  }
-  const ext = model.formato.startsWith('.') ? model.formato : '.' + model.formato
-  const url = URL.createObjectURL(file)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = model.nome + ext
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
-}
+// Event listeners
+View.el.filterCategoria.addEventListener('change', () => Controller.applyFilters())
+View.el.filterLicenca.addEventListener('change', () => Controller.applyFilters())
+View.el.filterFormato.addEventListener('change', () => Controller.applyFilters())
+View.el.filterOutros.addEventListener('change', () => Controller.applyFilters())
 
-V.filterCategoria.addEventListener('change', applyFilters)
-V.filterLicenca.addEventListener('change', applyFilters)
-V.filterFormato.addEventListener('change', applyFilters)
-V.filterOutros.addEventListener('change', applyFilters)
-
-V.ctxOverlay.addEventListener('click', () => {
-  V.ctxOverlay.classList.remove('active')
-  V.ctxMenu.classList.remove('active')
-  ctxModel = null
+View.el.ctxOverlay.addEventListener('click', () => {
+  View.el.ctxOverlay.classList.remove('active')
+  View.el.ctxMenu.classList.remove('active')
+  Controller.ctxModel = null
 })
 
 document.querySelectorAll('#contextMenu .ctx-item[data-action]').forEach(item => {
   item.addEventListener('click', async () => {
-    if (!ctxModel) return
-    if (item.dataset.action === 'view') openViewer3D(ctxModel)
-    if (item.dataset.action === 'convert') await convertBlendToGLTF(ctxModel)
-    if (item.dataset.action === 'download') await downloadModelFile(ctxModel)
+    if (!Controller.ctxModel) return
+    if (item.dataset.action === 'view') openViewer3D(Controller.ctxModel)
+    if (item.dataset.action === 'convert') await Controller.convertBlendToGLTF(Controller.ctxModel)
+    if (item.dataset.action === 'download') await Controller.downloadModelFile(Controller.ctxModel)
     if (item.dataset.action === 'delete') {
-      if (confirm(`Excluir "${ctxModel.nome}"?`)) {
-        M.deletarModelo(ctxModel).catch(e => V.showToast('Erro ao deletar: ' + e.message, 'error'))
-        const i = M.models.indexOf(ctxModel)
-        if (i > -1) M.models.splice(i, 1)
-        applyFilters()
+      if (confirm(`Excluir "${Controller.ctxModel.nome}"?`)) {
+        Model.deletarModelo(Controller.ctxModel).catch(e => View.showToast('Erro ao deletar: ' + e.message, 'error'))
+        const i = Model.models.indexOf(Controller.ctxModel)
+        if (i > -1) Model.models.splice(i, 1)
+        Controller.applyFilters()
         const ativa = document.querySelector('.cat-item.active')
-        V.renderSidebar(M.categories, M.models, ativa ? ativa.dataset.categoria : 'models')
-        V.showToast(`"${ctxModel.nome}" excluído`)
+        View.renderSidebar(Model.categories, Model.models, ativa ? ativa.dataset.categoria : 'models')
+        View.showToast(`"${Controller.ctxModel.nome}" excluído`)
       }
     }
-    V.ctxOverlay.classList.remove('active')
-    V.ctxMenu.classList.remove('active')
-    ctxModel = null
+    View.el.ctxOverlay.classList.remove('active')
+    View.el.ctxMenu.classList.remove('active')
+    Controller.ctxModel = null
   })
 })
 
-V.importFab.addEventListener('click', () => V.fileInput.click())
-V.fileInput.addEventListener('change', e => {
+View.el.importFab.addEventListener('click', () => View.el.fileInput.click())
+View.el.fileInput.addEventListener('change', e => {
   const file = e.target.files[0]
   if (!file) return
-  V.fileInput.value = ''
-  pendingFile = file
-  V.openImportDialog(file, M.categories)
+  View.el.fileInput.value = ''
+  Controller.pendingFile = file
+  View.openImportDialog(file, Model.categories)
 })
-V.dialogCancel.addEventListener('click', () => {
-  V.closeImportDialog()
-  pendingFile = null
+View.el.dialogCancel.addEventListener('click', () => {
+  View.closeImportDialog()
+  Controller.pendingFile = null
 })
-V.dialogConfirm.addEventListener('click', confirmImport)
-V.importDialogOverlay.addEventListener('click', e => {
-  if (e.target === V.importDialogOverlay) {
-    V.closeImportDialog()
-    pendingFile = null
+View.el.dialogConfirm.addEventListener('click', () => Controller.confirmImport())
+View.el.importDialogOverlay.addEventListener('click', e => {
+  if (e.target === View.el.importDialogOverlay) {
+    View.closeImportDialog()
+    Controller.pendingFile = null
   }
 })
-V.dialogName.addEventListener('keydown', e => { if (e.key === 'Enter') confirmImport() })
+View.el.dialogName.addEventListener('keydown', e => { if (e.key === 'Enter') Controller.confirmImport() })
 
-V.themeToggle.addEventListener('click', () => {
-  M.settings.theme = M.settings.theme === 'dark' ? 'light' : 'dark'
-  V.aplicarTema(M.settings.theme)
-  M.salvarConfig()
+View.el.themeToggle.addEventListener('click', () => {
+  Model.settings.theme = Model.settings.theme === 'dark' ? 'light' : 'dark'
+  View.aplicarTema(Model.settings.theme)
+  Model.salvarConfig()
 })
 
-V.settingsBtn.addEventListener('click', () => {
-  V.settingsOverlay.classList.add('active')
+View.el.settingsBtn.addEventListener('click', () => {
+  View.el.settingsOverlay.classList.add('active')
 })
-V.settingsClose.addEventListener('click', () => V.settingsOverlay.classList.remove('active'))
-V.settingsOverlay.addEventListener('click', e => {
-  if (e.target === V.settingsOverlay) V.settingsOverlay.classList.remove('active')
+View.el.settingsClose.addEventListener('click', () => View.el.settingsOverlay.classList.remove('active'))
+View.el.settingsOverlay.addEventListener('click', e => {
+  if (e.target === View.el.settingsOverlay) View.el.settingsOverlay.classList.remove('active')
 })
 
-function renderProgramListWithHandler() {
-  const handler = (index, prog) => {
-    M.externalPrograms.splice(index, 1)
-    M.salvarProgramas()
-    renderProgramListWithHandler()
-    V.showToast(`"${prog.nome}" removido`)
-    V.updateProgramAddBtn()
-  }
-  V.renderProgramList(M.externalPrograms, { onRemove: handler })
-}
-
-V.programAddBtn.addEventListener('click', () => {
-  const nome = V.programName.value.trim()
-  const caminho = V.programPath.value.trim().replace(/^["'\s]+|["'\s]+$/g, '')
+View.el.programAddBtn.addEventListener('click', () => {
+  const nome = View.el.programName.value.trim()
+  const caminho = View.el.programPath.value.trim().replace(/^["'\s]+|["'\s]+$/g, '')
   if (!nome || !caminho) return
-  if (M.externalPrograms.some(p => p.nome.toLowerCase() === nome.toLowerCase())) {
-    V.showToast(`"${nome}" já está configurado`, 'error')
+  if (Model.externalPrograms.some(p => p.nome.toLowerCase() === nome.toLowerCase())) {
+    View.showToast(`"${nome}" já está configurado`, 'error')
     return
   }
-  M.externalPrograms.push({ nome, caminho })
-  M.salvarProgramas()
-  renderProgramListWithHandler()
-  V.programName.value = ''
-  V.programPath.value = ''
-  V.updateProgramAddBtn()
-  V.showToast(`"${nome}" adicionado com sucesso`)
+  Model.externalPrograms.push({ nome, caminho })
+  Model.salvarProgramas()
+  Controller.renderProgramListWithHandler()
+  View.el.programName.value = ''
+  View.el.programPath.value = ''
+  View.updateProgramAddBtn()
+  View.showToast(`"${nome}" adicionado com sucesso`)
 })
 
-V.programName.addEventListener('input', V.updateProgramAddBtn)
-V.programPath.addEventListener('input', V.updateProgramAddBtn)
+View.el.programName.addEventListener('input', () => View.updateProgramAddBtn())
+View.el.programPath.addEventListener('input', () => View.updateProgramAddBtn())
 
 const progFileInput = document.createElement('input')
 progFileInput.type = 'file'
@@ -311,250 +357,207 @@ progFileInput.accept = '.exe,.cmd,.bat,.app,.lnk'
 progFileInput.id = 'programFileInput'
 document.body.appendChild(progFileInput)
 
-V.programBrowseBtn.addEventListener('click', () => progFileInput.click())
+View.el.programBrowseBtn.addEventListener('click', () => progFileInput.click())
 progFileInput.addEventListener('change', () => {
   if (progFileInput.files[0]) {
     const file = progFileInput.files[0]
     if (file.path && file.path !== file.name) {
-      V.programPath.value = file.path
+      View.el.programPath.value = file.path
     } else {
-      V.showToast('Cole o caminho completo do executável no campo', 'info')
-      V.programPath.focus()
+      View.showToast('Cole o caminho completo do executável no campo', 'info')
+      View.el.programPath.focus()
     }
-    V.updateProgramAddBtn()
+    View.updateProgramAddBtn()
   }
   progFileInput.value = ''
 })
 
-V.exportTxtBtn.addEventListener('click', async () => {
+View.el.exportTxtBtn.addEventListener('click', async () => {
   try {
-    V.showToast('Exportando modelos...', 'info')
-    await M.exportarParaArquivoTexto()
-    V.showToast('modelos.txt baixado!')
+    View.showToast('Exportando modelos...', 'info')
+    await Model.exportarParaArquivoTexto()
+    View.showToast('modelos.txt baixado!')
   } catch (err) {
-    V.showToast(err.message || 'Erro na exportação', 'error')
+    View.showToast(err.message || 'Erro na exportação', 'error')
   }
 })
 
-V.importTxtBtn.addEventListener('click', () => V.importTxtInput.click())
+View.el.importTxtBtn.addEventListener('click', () => View.el.importTxtInput.click())
 
-V.importTxtInput.addEventListener('change', async () => {
-  const file = V.importTxtInput.files[0]
+View.el.importTxtInput.addEventListener('change', async () => {
+  const file = View.el.importTxtInput.files[0]
   if (!file) return
-  V.importTxtInput.value = ''
+  View.el.importTxtInput.value = ''
   try {
     const texto = await file.text()
-    const imported = M.importarModelosDoTexto(texto)
+    const imported = Model.importarModelosDoTexto(texto)
     if (imported.length === 0) {
-      V.showToast('Nenhum modelo válido encontrado no arquivo', 'error')
+      View.showToast('Nenhum modelo válido encontrado no arquivo', 'error')
       return
     }
     for (const model of imported) {
-      M.models.unshift(model)
-      if (M.currentUser) {
-        await M.salvarModelo(model)
+      Model.models.unshift(model)
+      if (Model.currentUser) {
+        await Model.salvarModelo(model)
       }
     }
-    applyFilters()
+    Controller.applyFilters()
     const ativa = document.querySelector('.cat-item.active')
-    V.renderSidebar(M.categories, M.models, ativa ? ativa.dataset.categoria : 'models')
-    V.showToast(`${imported.length} modelo(s) importado(s)`)
+    View.renderSidebar(Model.categories, Model.models, ativa ? ativa.dataset.categoria : 'models')
+    View.showToast(`${imported.length} modelo(s) importado(s)`)
   } catch (err) {
-    V.showToast(err.message || 'Erro na importação', 'error')
+    View.showToast(err.message || 'Erro na importação', 'error')
   }
 })
 
-V.toolOpenIn.addEventListener('click', e => {
+View.el.toolOpenIn.addEventListener('click', e => {
   e.stopPropagation()
-  if (V.toolOpenInDropdown.classList.contains('active')) {
-    V.closeOpenInDropdown()
+  if (View.el.toolOpenInDropdown.classList.contains('active')) {
+    View.closeOpenInDropdown()
   } else {
-    V.openOpenInDropdown(M.externalPrograms, {
+    View.openOpenInDropdown(Model.externalPrograms, {
       onSelect: (prog) => {
-        if (viewerModel) generateOpenScript(prog, viewerModel)
+        if (viewerModel) Controller.generateOpenScript(prog, viewerModel)
       },
     })
   }
 })
 
 document.addEventListener('click', e => {
-  if (V.toolOpenInDropdown.classList.contains('active') &&
-      !V.toolOpenIn.contains(e.target) &&
-      !V.toolOpenInDropdown.contains(e.target)) {
-    V.closeOpenInDropdown()
+  if (View.el.toolOpenInDropdown.classList.contains('active') &&
+      !View.el.toolOpenIn.contains(e.target) &&
+      !View.el.toolOpenInDropdown.contains(e.target)) {
+    View.closeOpenInDropdown()
   }
 })
 
-V.toolDownload.addEventListener('click', async () => {
-  if (viewerModel) await downloadModelFile(viewerModel)
+View.el.toolDownload.addEventListener('click', async () => {
+  if (viewerModel) await Controller.downloadModelFile(viewerModel)
 })
-V.viewerConvertBtn.addEventListener('click', async () => {
-  if (viewerModel && (viewerModel.importedFile || viewerModel.storagePath)) await convertBlendToGLTF(viewerModel)
+View.el.viewerConvertBtn.addEventListener('click', async () => {
+  if (viewerModel && (viewerModel.importedFile || viewerModel.storagePath)) await Controller.convertBlendToGLTF(viewerModel)
 })
-V.viewerConfigBtn.addEventListener('click', () => {
+View.el.viewerConfigBtn.addEventListener('click', () => {
   closeModal()
-  V.settingsBtn.click()
+  View.el.settingsBtn.click()
   setTimeout(() => {
     const section = document.querySelector('#settingsPanel .settings-external')
     if (section) section.scrollIntoView({ behavior: 'smooth' })
   }, 500)
 })
 
-V.loginBtn.addEventListener('click', () => {
-  if (M.currentUser) {
-    V.renderAccountSettings(M.currentUser)
-    V.settingsOverlay.classList.add('active')
+View.el.loginBtn.addEventListener('click', () => {
+  if (Model.currentUser) {
+    View.renderAccountSettings(Model.currentUser)
+    View.el.settingsOverlay.classList.add('active')
   } else {
-    V.openLoginDialog()
+    View.openLoginDialog()
   }
 })
 
-V.loginClose.addEventListener('click', () => V.closeLoginDialog())
-V.loginCancel.addEventListener('click', () => V.closeLoginDialog())
-V.loginToggleMode.addEventListener('click', () => V.toggleLoginMode())
-V.loginConfirm.addEventListener('click', async () => {
-  V.hideLoginError()
-  const email = V.loginEmail.value.trim()
-  const password = V.loginPassword.value.trim()
+View.el.loginClose.addEventListener('click', () => View.closeLoginDialog())
+View.el.loginCancel.addEventListener('click', () => View.closeLoginDialog())
+View.el.loginToggleMode.addEventListener('click', () => View.toggleLoginMode())
+View.el.loginConfirm.addEventListener('click', async () => {
+  View.hideLoginError()
+  const email = View.el.loginEmail.value.trim()
+  const password = View.el.loginPassword.value.trim()
 
   if (!email || !password) {
-    V.showLoginError('Preencha e-mail e senha')
+    View.showLoginError('Preencha e-mail e senha')
     return
   }
 
-  if (V.isRegisterMode()) {
-    const usuario = V.loginUsername.value.trim()
+  if (View.isRegisterMode()) {
+    const usuario = View.el.loginUsername.value.trim()
     if (!usuario) {
-      V.showLoginError('Preencha seu nome de usuário')
+      View.showLoginError('Preencha seu nome de usuário')
       return
     }
     try {
-      const result = await M.signUpUser(email, password, usuario)
-      V.closeLoginDialog()
+      const result = await Model.signUpUser(email, password, usuario)
+      View.closeLoginDialog()
       if (result.session) {
-        V.updateLoginUI(M.currentUser)
-        V.showToast(`Conta criada! Bem-vindo, ${result.name}!`)
+        View.updateLoginUI(Model.currentUser)
+        View.showToast(`Conta criada! Bem-vindo, ${result.name}!`)
       } else {
-        V.showToast('Conta criada! Confirme seu e-mail antes de entrar.', 'info')
+        View.showToast('Conta criada! Confirme seu e-mail antes de entrar.', 'info')
       }
     } catch (err) {
-      V.showLoginError(tratarErroSupabase(err))
+      View.showLoginError(Controller.tratarErroSupabase(err))
     }
   } else {
     try {
-      await M.loginUser(email, password)
-      V.closeLoginDialog()
-      V.updateLoginUI(M.currentUser)
-      V.showToast(`Bem-vindo, ${M.currentUser.name}!`)
+      await Model.loginUser(email, password)
+      View.closeLoginDialog()
+      View.updateLoginUI(Model.currentUser)
+      View.showToast(`Bem-vindo, ${Model.currentUser.name}!`)
       try {
-        await M.carregarModelos()
-        applyFilters()
+        await Model.carregarModelos()
+        Controller.applyFilters()
         const ativa = document.querySelector('.cat-item.active')
-        V.renderSidebar(M.categories, M.models, ativa ? ativa.dataset.categoria : 'models')
+        View.renderSidebar(Model.categories, Model.models, ativa ? ativa.dataset.categoria : 'models')
       } catch (e) {
         console.warn('Modelos não carregados:', e.message)
       }
     } catch (err) {
-      V.showLoginError(tratarErroSupabase(err))
+      View.showLoginError(Controller.tratarErroSupabase(err))
     }
   }
 })
 
-V.loginDialogOverlay.addEventListener('click', e => {
-  if (e.target === V.loginDialogOverlay) V.closeLoginDialog()
+View.el.loginDialogOverlay.addEventListener('click', e => {
+  if (e.target === View.el.loginDialogOverlay) View.closeLoginDialog()
 })
 
-V.loginPassword.addEventListener('keydown', e => {
-  if (e.key === 'Enter') V.loginConfirm.click()
+View.el.loginPassword.addEventListener('keydown', e => {
+  if (e.key === 'Enter') View.el.loginConfirm.click()
 })
 
-V.loginUsername.addEventListener('keydown', e => {
-  if (e.key === 'Enter') V.loginConfirm.click()
+View.el.loginUsername.addEventListener('keydown', e => {
+  if (e.key === 'Enter') View.el.loginConfirm.click()
 })
 
-V.accountSaveBtn.addEventListener('click', async () => {
-  const name = V.accountNameInput.value.trim()
-  const email = V.accountEmailInput.value.trim()
+View.el.accountSaveBtn.addEventListener('click', async () => {
+  const name = View.el.accountNameInput.value.trim()
+  const email = View.el.accountEmailInput.value.trim()
   if (!name || !email) {
-    V.showToast('Preencha nome e e-mail', 'error')
+    View.showToast('Preencha nome e e-mail', 'error')
     return
   }
   try {
-    await M.updateUser({ name, email })
-    V.renderAccountSettings(M.currentUser)
-    V.updateLoginUI(M.currentUser)
-    V.showToast('Conta atualizada')
+    await Model.updateUser({ name, email })
+    View.renderAccountSettings(Model.currentUser)
+    View.updateLoginUI(Model.currentUser)
+    View.showToast('Conta atualizada')
   } catch (err) {
-    V.showToast(tratarErroSupabase(err), 'error')
+    View.showToast(Controller.tratarErroSupabase(err), 'error')
   }
 })
 
-V.accountLogoutBtn.addEventListener('click', async () => {
+View.el.accountLogoutBtn.addEventListener('click', async () => {
   try {
-    await M.logoutUser()
-    M.models.length = 0
-    applyFilters()
+    await Model.logoutUser()
+    Model.models.length = 0
+    Controller.applyFilters()
     const ativa = document.querySelector('.cat-item.active')
-    V.renderSidebar(M.categories, M.models, ativa ? ativa.dataset.categoria : 'models')
-    V.renderAccountSettings(null)
-    V.settingsOverlay.classList.remove('active')
-    V.updateLoginUI(null)
-    V.showToast('Desconectado')
+    View.renderSidebar(Model.categories, Model.models, ativa ? ativa.dataset.categoria : 'models')
+    View.renderAccountSettings(null)
+    View.el.settingsOverlay.classList.remove('active')
+    View.updateLoginUI(null)
+    View.showToast('Desconectado')
   } catch (err) {
-    V.showToast('Erro ao desconectar', 'error')
+    View.showToast('Erro ao desconectar', 'error')
   }
 })
-
-function tratarErroSupabase(err) {
-  const msg = err?.message || ''
-  if (msg.includes('Invalid login credentials')) return 'E-mail ou senha incorretos'
-  if (msg.includes('Email not confirmed')) return 'Confirme seu e-mail antes de entrar'
-  if (msg.includes('User already registered')) return 'Este e-mail já está cadastrado'
-  if (msg.includes('Password should be')) return 'Senha muito curta (mínimo 6 caracteres)'
-  return msg || 'Erro inesperado. Tente novamente.'
-}
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && V.importDialogOverlay.classList.contains('active')) {
-    V.closeImportDialog()
-    pendingFile = null
+  if (e.key === 'Escape' && View.el.importDialogOverlay.classList.contains('active')) {
+    View.closeImportDialog()
+    Controller.pendingFile = null
   }
-  if (e.key === 'Escape' && V.settingsOverlay.classList.contains('active')) V.settingsOverlay.classList.remove('active')
-  if (e.key === 'Escape' && V.loginDialogOverlay.classList.contains('active')) V.closeLoginDialog()
+  if (e.key === 'Escape' && View.el.settingsOverlay.classList.contains('active')) View.el.settingsOverlay.classList.remove('active')
+  if (e.key === 'Escape' && View.el.loginDialogOverlay.classList.contains('active')) View.closeLoginDialog()
 })
 
-async function init() {
-  M.carregarConfig()
-  M.carregarProgramas()
-  V.populateFilters(M.categories)
-  V.renderSidebar(M.categories, M.models, 'models')
-  applyFilters()
-  renderProgramListWithHandler()
-  V.aplicarTema(M.settings.theme)
-
-  try {
-    await M.carregarSessao()
-  } catch (e) {
-    console.warn('Sessão não restaurada:', e.message)
-  }
-  V.updateLoginUI(M.currentUser)
-
-  if (M.currentUser) {
-    try {
-      await M.carregarModelos()
-      applyFilters()
-      const ativa = document.querySelector('.cat-item.active')
-      V.renderSidebar(M.categories, M.models, ativa ? ativa.dataset.categoria : 'models')
-    } catch (e) {
-      console.warn('Modelos não carregados:', e.message)
-    }
-  }
-
-  M.onAuthChange((user) => {
-    V.updateLoginUI(user)
-  })
-
-  console.log('✅ Streamline 3D carregado!')
-}
-
-init()
+Controller.init()

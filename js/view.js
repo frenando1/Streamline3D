@@ -1,69 +1,8 @@
-import { guessCategory, licenseNames } from './model.js'
-
-export const categoryList = document.getElementById('categoryList')
-export const filterCategoria = document.getElementById('filterCategoria')
-export const filterLicenca = document.getElementById('filterLicenca')
-export const filterOutros = document.getElementById('filterOutros')
-export const filterFormato = document.getElementById('filterFormato')
-export const grid = document.getElementById('grid')
-export const ctxOverlay = document.getElementById('contextOverlay')
-export const ctxMenu = document.getElementById('contextMenu')
-export const modalOverlay = document.getElementById('modalOverlay')
-export const closeBtn = document.getElementById('closeBtn')
-export const viewport = document.getElementById('viewport')
-export const loadingEl = document.getElementById('loadingOverlay')
-export const modalAssetName = document.getElementById('modalAssetName')
-export const modalAuthor = document.getElementById('modalAuthor')
-export const fileInput = document.getElementById('fileInput')
-export const importFab = document.getElementById('importFab')
-export const importDialogOverlay = document.getElementById('importDialogOverlay')
-export const dialogFileName = document.getElementById('dialogFileName')
-export const dialogFileSize = document.getElementById('dialogFileSize')
-export const dialogName = document.getElementById('dialogName')
-export const dialogCategory = document.getElementById('dialogCategory')
-export const dialogLicense = document.getElementById('dialogLicense')
-export const dialogCancel = document.getElementById('dialogCancel')
-export const dialogConfirm = document.getElementById('dialogConfirm')
-export const toast = document.getElementById('toast')
-export const themeToggle = document.getElementById('themeToggle')
-export const settingsBtn = document.getElementById('settingsBtn')
-export const settingsOverlay = document.getElementById('settingsOverlay')
-export const settingsClose = document.getElementById('settingsClose')
-export const settingsProgramList = document.getElementById('settingsProgramList')
-export const programName = document.getElementById('programName')
-export const programPath = document.getElementById('programPath')
-export const programBrowseBtn = document.getElementById('programBrowseBtn')
-export const programAddBtn = document.getElementById('programAddBtn')
-export const toolDownload = document.getElementById('toolDownload')
-export const toolOpenIn = document.getElementById('toolOpenIn')
-export const toolOpenInDropdown = document.getElementById('toolOpenInDropdown')
-export const toolOpenInList = document.getElementById('toolOpenInList')
-export const viewerConvertBtn = document.getElementById('viewerConvertBtn')
-export const viewerConfigBtn = document.getElementById('viewerConfigBtn')
-export const loginDialogOverlay = document.getElementById('loginDialogOverlay')
-export const loginDialogTitle = document.getElementById('loginDialogTitle')
-export const loginUsernameField = document.getElementById('loginUsernameField')
-export const loginUsername = document.getElementById('loginUsername')
-export const loginEmail = document.getElementById('loginEmail')
-export const loginPassword = document.getElementById('loginPassword')
-export const loginError = document.getElementById('loginError')
-export const loginCancel = document.getElementById('loginCancel')
-export const loginConfirm = document.getElementById('loginConfirm')
-export const loginClose = document.getElementById('loginClose')
-export const loginToggleMode = document.getElementById('loginToggleMode')
-export const loginBtn = document.getElementById('Login')
-export const settingsAccount = document.getElementById('settingsAccount')
-export const accountAvatar = document.getElementById('accountAvatar')
-export const accountName = document.getElementById('accountName')
-export const accountEmail = document.getElementById('accountEmail')
-export const accountNameInput = document.getElementById('accountNameInput')
-export const accountEmailInput = document.getElementById('accountEmailInput')
-export const accountPasswordInput = document.getElementById('accountPasswordInput')
-export const accountSaveBtn = document.getElementById('accountSaveBtn')
-export const accountLogoutBtn = document.getElementById('accountLogoutBtn')
-export const exportTxtBtn = document.getElementById('exportTxtBtn')
-export const importTxtBtn = document.getElementById('importTxtBtn')
-export const importTxtInput = document.getElementById('importTxtInput')
+import { Model } from './model.js'
+import * as THREE from 'three'
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 
 function escapeHtml(str) {
   const div = document.createElement('div')
@@ -77,296 +16,656 @@ function formatFileSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
 
-export function getIconForFormat(fmt) {
+function getIconForFormat(fmt) {
   return { '.blend': '🧊', '.max': '📐', '.fbx': '🔷', '.gltf': '◈', '.obj': '🔶' }[fmt] || '📦'
 }
 
 const icons = { success: '✅', error: '❌', loading: '⏳', info: 'ℹ️' }
 
-export function showToast(msg, tipo = 'success') {
-  toast.innerHTML = `<span>${icons[tipo] || '✅'}</span> ${msg}`
-  toast.classList.add('active')
-  clearTimeout(toast._timer)
-  toast._timer = setTimeout(() => toast.classList.remove('active'), 3500)
-}
-
-export function renderSidebar(categories, models, ativa = 'models') {
-  categoryList.innerHTML = ''
-  categories.forEach(cat => {
-    const el = document.createElement('div')
-    el.className = 'cat-item' + (cat.id === ativa ? ' active' : '')
-    el.innerHTML = `
-      <span class="dot" style="background:${cat.cor}"></span>
-      <span>${cat.nome}</span>
-      <span class="count">${models.filter(m => m.categoria === cat.id).length}</span>
-    `
-    el.dataset.categoria = cat.id
-    el.addEventListener('click', () => {
-      document.querySelectorAll('.cat-item').forEach(c => c.classList.remove('active'))
-      el.classList.add('active')
-      filterCategoria.value = cat.id
-      filterCategoria.dispatchEvent(new Event('change'))
-    })
-    categoryList.appendChild(el)
-  })
-}
-
-export function populateFilters(categories) {
-  filterCategoria.innerHTML = '<option value="todas">Todas as categorias</option>'
-  categories.forEach(cat => {
-    const opt = document.createElement('option')
-    opt.value = cat.id
-    opt.textContent = cat.nome
-    filterCategoria.appendChild(opt)
-  })
-  filterCategoria.value = 'todas'
-}
-
-export function renderGrid(data, { onMenuClick, onCardClick }) {
-  if (data.length === 0) {
-    grid.className = 'empty-state'
-    grid.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
-        <line x1="12" y1="16" x2="12.01" y2="16"/>
-      </svg>
-      <span>Nenhum modelo encontrado</span>`
-    return
-  }
-  grid.className = ''
-  grid.innerHTML = ''
-  data.forEach(model => {
-    const card = document.createElement('div')
-    card.className = 'model-card'
-    card.innerHTML = `
-      <div class="thumb" style="background:${model.thumbnailGrad}">
-        <span class="format-tag">${model.formato}</span>
-        <span class="placeholder-icon">${getIconForFormat(model.formato)}</span>
-      </div>
-      <div class="info">
-        <div class="name">${model.nome}</div>
-        <div class="author">${model.autor}</div>
-      </div>
-      <button class="menu-btn" data-id="${model.id}">⋯</button>`
-    card.querySelector('.menu-btn').addEventListener('click', e => {
-      e.stopPropagation()
-      onMenuClick(model, e)
-    })
-    card.addEventListener('click', () => onCardClick(model))
-    grid.appendChild(card)
-  })
-}
-
-export function renderProgramList(programs, { onRemove }) {
-  settingsProgramList.innerHTML = ''
-  programs.forEach((prog, i) => {
-    const item = document.createElement('div')
-    item.className = 'program-item'
-    item.innerHTML = `
-      <div class="program-item-info">
-        <div class="program-item-name">${escapeHtml(prog.nome)}</div>
-        <div class="program-item-path" title="${escapeHtml(prog.caminho)}">${escapeHtml(prog.caminho)}</div>
-      </div>
-      <button class="program-item-remove" data-index="${i}" title="Remover">✕</button>`
-    item.querySelector('.program-item-remove').addEventListener('click', () => onRemove(i, prog))
-    settingsProgramList.appendChild(item)
-  })
-}
-
-export function updateProgramAddBtn() {
-  programAddBtn.disabled = !programName.value.trim() || !programPath.value.trim()
-}
-
-export function aplicarTema(tema) {
-  document.documentElement.setAttribute('data-theme', tema)
-  const s = document.documentElement.style
-  if (tema === 'light') {
-    s.setProperty('--bg-app', '#f5f5f7')
-    s.setProperty('--bg-sidebar', '#fff')
-    s.setProperty('--bg-card', '#fff')
-    s.setProperty('--bg-hover', 'rgba(0,0,0,0.04)')
-    s.setProperty('--border', '1px solid rgba(0,0,0,0.08)')
-    s.setProperty('--border-hover', '1px solid rgba(0,0,0,0.15)')
-    s.setProperty('--text', '#1a1a1e')
-    s.setProperty('--text-sec', 'rgba(0,0,0,0.55)')
-    s.setProperty('--text-ter', 'rgba(0,0,0,0.35)')
-    themeToggle.textContent = '☀️'
-  } else {
-    s.setProperty('--bg-app', '#0a0a0c')
-    s.setProperty('--bg-sidebar', '#121216')
-    s.setProperty('--bg-card', '#1a1a1e')
-    s.setProperty('--bg-hover', 'rgba(255,255,255,0.04)')
-    s.setProperty('--border', '1px solid rgba(255,255,255,0.06)')
-    s.setProperty('--border-hover', '1px solid rgba(255,255,255,0.12)')
-    s.setProperty('--text', '#fff')
-    s.setProperty('--text-sec', 'rgba(255,255,255,0.55)')
-    s.setProperty('--text-ter', 'rgba(255,255,255,0.35)')
-    themeToggle.textContent = '🌙'
-  }
-}
-
-export function showViewerMessage(msg, formato) {
-  const el = document.getElementById('viewerMessage')
-  el.querySelector('.msg-icon').textContent = formato === '.blend' ? '📦' : '⚠️'
-  el.querySelector('.msg-text').textContent = msg
-  viewerConvertBtn.style.display = formato === '.blend' ? 'inline-flex' : 'none'
-  viewerConfigBtn.style.display = formato === '.blend' ? 'inline-flex' : 'none'
-  el.classList.add('active')
-}
-
-export function hideViewerMessage() {
-  document.getElementById('viewerMessage').classList.remove('active')
-}
-
-export function openImportDialog(file, categories) {
-  const parts = file.name.split('.')
-  const ext = parts.pop().toLowerCase()
-  dialogFileName.textContent = file.name
-  dialogFileSize.textContent = formatFileSize(file.size)
-  dialogName.value = parts.join('.')
-
-  dialogCategory.innerHTML = ''
-  categories.forEach(cat => {
-    const opt = document.createElement('option')
-    opt.value = cat.id
-    opt.textContent = cat.nome
-    if (cat.id === guessCategory(ext)) opt.selected = true
-    dialogCategory.appendChild(opt)
-  })
-
-  dialogLicense.innerHTML = ''
-  Object.entries(licenseNames).forEach(([val, label]) => {
-    const opt = document.createElement('option')
-    opt.value = val
-    opt.textContent = label
-    dialogLicense.appendChild(opt)
-  })
-
-  importDialogOverlay.classList.add('active')
-  setTimeout(() => dialogName.focus(), 100)
-}
-
-export function closeImportDialog() {
-  importDialogOverlay.classList.remove('active')
-}
-
 let loginMode = 'login'
 
-export function openLoginDialog(mode) {
-  loginMode = mode || 'login'
-  renderLoginMode()
-  loginDialogOverlay.classList.add('active')
-  setTimeout(() => loginEmail.focus(), 100)
-}
+export const View = {
+  el: {
+    categoryList: document.getElementById('categoryList'),
+    filterCategoria: document.getElementById('filterCategoria'),
+    filterLicenca: document.getElementById('filterLicenca'),
+    filterOutros: document.getElementById('filterOutros'),
+    filterFormato: document.getElementById('filterFormato'),
+    grid: document.getElementById('grid'),
+    ctxOverlay: document.getElementById('contextOverlay'),
+    ctxMenu: document.getElementById('contextMenu'),
+    modalOverlay: document.getElementById('modalOverlay'),
+    closeBtn: document.getElementById('closeBtn'),
+    viewport: document.getElementById('viewport'),
+    loadingEl: document.getElementById('loadingOverlay'),
+    modalAssetName: document.getElementById('modalAssetName'),
+    modalAuthor: document.getElementById('modalAuthor'),
+    fileInput: document.getElementById('fileInput'),
+    importFab: document.getElementById('importFab'),
+    importDialogOverlay: document.getElementById('importDialogOverlay'),
+    dialogFileName: document.getElementById('dialogFileName'),
+    dialogFileSize: document.getElementById('dialogFileSize'),
+    dialogName: document.getElementById('dialogName'),
+    dialogCategory: document.getElementById('dialogCategory'),
+    dialogLicense: document.getElementById('dialogLicense'),
+    dialogCancel: document.getElementById('dialogCancel'),
+    dialogConfirm: document.getElementById('dialogConfirm'),
+    toast: document.getElementById('toast'),
+    themeToggle: document.getElementById('themeToggle'),
+    settingsBtn: document.getElementById('settingsBtn'),
+    settingsOverlay: document.getElementById('settingsOverlay'),
+    settingsClose: document.getElementById('settingsClose'),
+    settingsProgramList: document.getElementById('settingsProgramList'),
+    programName: document.getElementById('programName'),
+    programPath: document.getElementById('programPath'),
+    programBrowseBtn: document.getElementById('programBrowseBtn'),
+    programAddBtn: document.getElementById('programAddBtn'),
+    toolDownload: document.getElementById('toolDownload'),
+    toolOpenIn: document.getElementById('toolOpenIn'),
+    toolOpenInDropdown: document.getElementById('toolOpenInDropdown'),
+    toolOpenInList: document.getElementById('toolOpenInList'),
+    viewerConvertBtn: document.getElementById('viewerConvertBtn'),
+    viewerConfigBtn: document.getElementById('viewerConfigBtn'),
+    loginDialogOverlay: document.getElementById('loginDialogOverlay'),
+    loginDialogTitle: document.getElementById('loginDialogTitle'),
+    loginUsernameField: document.getElementById('loginUsernameField'),
+    loginUsername: document.getElementById('loginUsername'),
+    loginEmail: document.getElementById('loginEmail'),
+    loginPassword: document.getElementById('loginPassword'),
+    loginError: document.getElementById('loginError'),
+    loginCancel: document.getElementById('loginCancel'),
+    loginConfirm: document.getElementById('loginConfirm'),
+    loginClose: document.getElementById('loginClose'),
+    loginToggleMode: document.getElementById('loginToggleMode'),
+    loginBtn: document.getElementById('Login'),
+    settingsAccount: document.getElementById('settingsAccount'),
+    accountAvatar: document.getElementById('accountAvatar'),
+    accountName: document.getElementById('accountName'),
+    accountEmail: document.getElementById('accountEmail'),
+    accountNameInput: document.getElementById('accountNameInput'),
+    accountEmailInput: document.getElementById('accountEmailInput'),
+    accountPasswordInput: document.getElementById('accountPasswordInput'),
+    accountSaveBtn: document.getElementById('accountSaveBtn'),
+    accountLogoutBtn: document.getElementById('accountLogoutBtn'),
+    exportTxtBtn: document.getElementById('exportTxtBtn'),
+    importTxtBtn: document.getElementById('importTxtBtn'),
+    importTxtInput: document.getElementById('importTxtInput'),
+    viewerMessage: document.getElementById('viewerMessage'),
+  },
 
-function renderLoginMode() {
-  const isRegister = loginMode === 'register'
-  loginDialogTitle.textContent = isRegister ? 'Criar Conta' : 'Entrar'
-  loginConfirm.textContent = isRegister ? 'Criar Conta' : 'Entrar'
-  loginToggleMode.textContent = isRegister ? 'Já tenho conta' : 'Criar conta'
-  loginUsernameField.style.display = isRegister ? '' : 'none'
-  if (!isRegister) loginUsername.value = ''
-  loginError.style.display = 'none'
-}
+  showToast(msg, tipo = 'success') {
+    this.el.toast.innerHTML = `<span>${icons[tipo] || '✅'}</span> ${msg}`
+    this.el.toast.classList.add('active')
+    clearTimeout(this.el.toast._timer)
+    this.el.toast._timer = setTimeout(() => this.el.toast.classList.remove('active'), 3500)
+  },
 
-export function toggleLoginMode() {
-  loginMode = loginMode === 'login' ? 'register' : 'login'
-  renderLoginMode()
-}
+  renderSidebar(categories, models, ativa = 'models') {
+    this.el.categoryList.innerHTML = ''
+    categories.forEach(cat => {
+      const el = document.createElement('div')
+      el.className = 'cat-item' + (cat.id === ativa ? ' active' : '')
+      el.innerHTML = `
+        <span class="dot" style="background:${cat.cor}"></span>
+        <span>${cat.nome}</span>
+        <span class="count">${models.filter(m => m.categoria === cat.id).length}</span>
+      `
+      el.dataset.categoria = cat.id
+      el.addEventListener('click', () => {
+        document.querySelectorAll('.cat-item').forEach(c => c.classList.remove('active'))
+        el.classList.add('active')
+        this.el.filterCategoria.value = cat.id
+        this.el.filterCategoria.dispatchEvent(new Event('change'))
+      })
+      this.el.categoryList.appendChild(el)
+    })
+  },
 
-export function isRegisterMode() {
-  return loginMode === 'register'
-}
+  populateFilters(categories) {
+    this.el.filterCategoria.innerHTML = '<option value="todas">Todas as categorias</option>'
+    categories.forEach(cat => {
+      const opt = document.createElement('option')
+      opt.value = cat.id
+      opt.textContent = cat.nome
+      this.el.filterCategoria.appendChild(opt)
+    })
+    this.el.filterCategoria.value = 'todas'
+  },
 
-export function showLoginError(msg) {
-  loginError.textContent = msg
-  loginError.style.display = ''
-}
+  renderGrid(data, { onMenuClick, onCardClick }) {
+    if (data.length === 0) {
+      this.el.grid.className = 'empty-state'
+      this.el.grid.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <span>Nenhum modelo encontrado</span>`
+      return
+    }
+    this.el.grid.className = ''
+    this.el.grid.innerHTML = ''
+    data.forEach(model => {
+      const card = document.createElement('div')
+      card.className = 'model-card'
+      card.innerHTML = `
+        <div class="thumb" style="background:${model.thumbnailGrad}">
+          <span class="format-tag">${model.formato}</span>
+          <span class="placeholder-icon">${getIconForFormat(model.formato)}</span>
+        </div>
+        <div class="info">
+          <div class="name">${model.nome}</div>
+          <div class="author">${model.autor}</div>
+        </div>
+        <button class="menu-btn" data-id="${model.id}">⋯</button>`
+      card.querySelector('.menu-btn').addEventListener('click', e => {
+        e.stopPropagation()
+        onMenuClick(model, e)
+      })
+      card.addEventListener('click', () => onCardClick(model))
+      this.el.grid.appendChild(card)
+    })
+  },
 
-export function hideLoginError() {
-  loginError.style.display = 'none'
-}
+  renderProgramList(programs, { onRemove }) {
+    this.el.settingsProgramList.innerHTML = ''
+    programs.forEach((prog, i) => {
+      const item = document.createElement('div')
+      item.className = 'program-item'
+      item.innerHTML = `
+        <div class="program-item-info">
+          <div class="program-item-name">${escapeHtml(prog.nome)}</div>
+          <div class="program-item-path" title="${escapeHtml(prog.caminho)}">${escapeHtml(prog.caminho)}</div>
+        </div>
+        <button class="program-item-remove" data-index="${i}" title="Remover">✕</button>`
+      item.querySelector('.program-item-remove').addEventListener('click', () => onRemove(i, prog))
+      this.el.settingsProgramList.appendChild(item)
+    })
+  },
 
-export function closeLoginDialog() {
-  loginDialogOverlay.classList.remove('active')
-  loginEmail.value = ''
-  loginPassword.value = ''
-  loginUsername.value = ''
-  loginError.style.display = 'none'
-  loginMode = 'login'
-}
+  updateProgramAddBtn() {
+    this.el.programAddBtn.disabled = !this.el.programName.value.trim() || !this.el.programPath.value.trim()
+  },
 
-export function updateLoginUI(user) {
-  if (user) {
+  aplicarTema(tema) {
+    document.documentElement.setAttribute('data-theme', tema)
+    const s = document.documentElement.style
+    if (tema === 'light') {
+      s.setProperty('--bg-app', '#f5f5f7')
+      s.setProperty('--bg-sidebar', '#fff')
+      s.setProperty('--bg-card', '#fff')
+      s.setProperty('--bg-hover', 'rgba(0,0,0,0.04)')
+      s.setProperty('--border', '1px solid rgba(0,0,0,0.08)')
+      s.setProperty('--border-hover', '1px solid rgba(0,0,0,0.15)')
+      s.setProperty('--text', '#1a1a1e')
+      s.setProperty('--text-sec', 'rgba(0,0,0,0.55)')
+      s.setProperty('--text-ter', 'rgba(0,0,0,0.35)')
+      this.el.themeToggle.textContent = '☀️'
+    } else {
+      s.setProperty('--bg-app', '#0a0a0c')
+      s.setProperty('--bg-sidebar', '#121216')
+      s.setProperty('--bg-card', '#1a1a1e')
+      s.setProperty('--bg-hover', 'rgba(255,255,255,0.04)')
+      s.setProperty('--border', '1px solid rgba(255,255,255,0.06)')
+      s.setProperty('--border-hover', '1px solid rgba(255,255,255,0.12)')
+      s.setProperty('--text', '#fff')
+      s.setProperty('--text-sec', 'rgba(255,255,255,0.55)')
+      s.setProperty('--text-ter', 'rgba(255,255,255,0.35)')
+      this.el.themeToggle.textContent = '🌙'
+    }
+  },
+
+  showViewerMessage(msg, formato) {
+    this.el.viewerMessage.querySelector('.msg-icon').textContent = formato === '.blend' ? '📦' : '⚠️'
+    this.el.viewerMessage.querySelector('.msg-text').textContent = msg
+    this.el.viewerConvertBtn.style.display = formato === '.blend' ? 'inline-flex' : 'none'
+    this.el.viewerConfigBtn.style.display = formato === '.blend' ? 'inline-flex' : 'none'
+    this.el.viewerMessage.classList.add('active')
+  },
+
+  hideViewerMessage() {
+    this.el.viewerMessage.classList.remove('active')
+  },
+
+  openImportDialog(file, categories) {
+    const parts = file.name.split('.')
+    const ext = parts.pop().toLowerCase()
+    this.el.dialogFileName.textContent = file.name
+    this.el.dialogFileSize.textContent = formatFileSize(file.size)
+    this.el.dialogName.value = parts.join('.')
+
+    this.el.dialogCategory.innerHTML = ''
+    categories.forEach(cat => {
+      const opt = document.createElement('option')
+      opt.value = cat.id
+      opt.textContent = cat.nome
+      if (cat.id === Model.guessCategory(ext)) opt.selected = true
+      this.el.dialogCategory.appendChild(opt)
+    })
+
+    this.el.dialogLicense.innerHTML = ''
+    Object.entries(Model.licenseNames).forEach(([val, label]) => {
+      const opt = document.createElement('option')
+      opt.value = val
+      opt.textContent = label
+      this.el.dialogLicense.appendChild(opt)
+    })
+
+    this.el.importDialogOverlay.classList.add('active')
+    setTimeout(() => this.el.dialogName.focus(), 100)
+  },
+
+  closeImportDialog() {
+    this.el.importDialogOverlay.classList.remove('active')
+  },
+
+  openLoginDialog(mode) {
+    loginMode = mode || 'login'
+    this._renderLoginMode()
+    this.el.loginDialogOverlay.classList.add('active')
+    setTimeout(() => this.el.loginEmail.focus(), 100)
+  },
+
+  _renderLoginMode() {
+    const isRegister = loginMode === 'register'
+    this.el.loginDialogTitle.textContent = isRegister ? 'Criar Conta' : 'Entrar'
+    this.el.loginConfirm.textContent = isRegister ? 'Criar Conta' : 'Entrar'
+    this.el.loginToggleMode.textContent = isRegister ? 'Já tenho conta' : 'Criar conta'
+    this.el.loginUsernameField.style.display = isRegister ? '' : 'none'
+    if (!isRegister) this.el.loginUsername.value = ''
+    this.el.loginError.style.display = 'none'
+  },
+
+  toggleLoginMode() {
+    loginMode = loginMode === 'login' ? 'register' : 'login'
+    this._renderLoginMode()
+  },
+
+  isRegisterMode() {
+    return loginMode === 'register'
+  },
+
+  showLoginError(msg) {
+    this.el.loginError.textContent = msg
+    this.el.loginError.style.display = ''
+  },
+
+  hideLoginError() {
+    this.el.loginError.style.display = 'none'
+  },
+
+  closeLoginDialog() {
+    this.el.loginDialogOverlay.classList.remove('active')
+    this.el.loginEmail.value = ''
+    this.el.loginPassword.value = ''
+    this.el.loginUsername.value = ''
+    this.el.loginError.style.display = 'none'
+    loginMode = 'login'
+  },
+
+  updateLoginUI(user) {
+    if (user) {
+      const initial = user.name.charAt(0).toUpperCase()
+      this.el.loginBtn.textContent = initial
+      this.el.loginBtn.title = `${user.email} — Configurações da conta`
+    } else {
+      this.el.loginBtn.textContent = '👤'
+      this.el.loginBtn.title = 'Login'
+    }
+  },
+
+  renderAccountSettings(user) {
+    if (!user) {
+      this.el.settingsAccount.classList.remove('active')
+      return
+    }
     const initial = user.name.charAt(0).toUpperCase()
-    loginBtn.textContent = initial
-    loginBtn.title = `${user.email} — Configurações da conta`
-  } else {
-    loginBtn.textContent = '👤'
-    loginBtn.title = 'Login'
-  }
-}
+    this.el.accountAvatar.textContent = initial
+    this.el.accountName.textContent = user.name
+    this.el.accountEmail.textContent = user.email
+    this.el.accountNameInput.value = user.name
+    this.el.accountEmailInput.value = user.email
+    this.el.accountPasswordInput.value = ''
+    this.el.settingsAccount.classList.add('active')
+  },
 
-export function renderAccountSettings(user) {
-  if (!user) {
-    settingsAccount.classList.remove('active')
-    return
-  }
-  const initial = user.name.charAt(0).toUpperCase()
-  accountAvatar.textContent = initial
-  accountName.textContent = user.name
-  accountEmail.textContent = user.email
-  accountNameInput.value = user.name
-  accountEmailInput.value = user.email
-  accountPasswordInput.value = ''
-  settingsAccount.classList.add('active')
-}
+  closeOpenInDropdown() {
+    this.el.toolOpenInDropdown.classList.remove('active')
+  },
 
-export function closeOpenInDropdown() {
-  toolOpenInDropdown.classList.remove('active')
-}
+  openOpenInDropdown(programs, { onSelect }) {
+    this.el.toolOpenInList.innerHTML = ''
+    if (programs.length === 0) {
+      this.el.toolOpenInList.innerHTML = '<div class="dropdown-empty">Nenhum programa configurado</div>'
+    } else {
+      programs.forEach(prog => {
+        const item = document.createElement('div')
+        item.className = 'dropdown-item'
+        item.innerHTML = `
+          <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          <div class="dropdown-item-info">
+            <div class="dropdown-item-name">${escapeHtml(prog.nome)}</div>
+            <div class="dropdown-item-path">${escapeHtml(prog.caminho)}</div>
+          </div>`
+        item.addEventListener('click', () => {
+          onSelect(prog)
+          this.el.toolOpenInDropdown.classList.remove('active')
+        })
+        this.el.toolOpenInList.appendChild(item)
+      })
+    }
+    this.el.toolOpenInDropdown.classList.add('active')
+  },
 
-export function openOpenInDropdown(programs, { onSelect }) {
-  toolOpenInList.innerHTML = ''
-  if (programs.length === 0) {
-    toolOpenInList.innerHTML = '<div class="dropdown-empty">Nenhum programa configurado</div>'
-  } else {
+  updateContextMenuPrograms(programs, ctxOverlay, ctxMenu, { onSelect }) {
+    const oldItems = ctxMenu.querySelectorAll('.ctx-item[data-action="openin"]')
+    oldItems.forEach(el => el.remove())
+    if (programs.length === 0) return
+    const divider = ctxMenu.querySelector('.ctx-divider')
     programs.forEach(prog => {
       const item = document.createElement('div')
-      item.className = 'dropdown-item'
+      item.className = 'ctx-item'
+      item.dataset.action = 'openin'
       item.innerHTML = `
         <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-        <div class="dropdown-item-info">
-          <div class="dropdown-item-name">${escapeHtml(prog.nome)}</div>
-          <div class="dropdown-item-path">${escapeHtml(prog.caminho)}</div>
-        </div>`
+        <span>Abrir em ${escapeHtml(prog.nome)}</span>`
       item.addEventListener('click', () => {
         onSelect(prog)
-        closeOpenInDropdown()
+        ctxOverlay.classList.remove('active')
+        ctxMenu.classList.remove('active')
       })
-      toolOpenInList.appendChild(item)
+      ctxMenu.insertBefore(item, divider)
     })
-  }
-  toolOpenInDropdown.classList.add('active')
+  },
 }
 
-export function updateContextMenuPrograms(programs, ctxOverlay, ctxMenu, { onSelect }) {
-  const oldItems = ctxMenu.querySelectorAll('.ctx-item[data-action="openin"]')
-  oldItems.forEach(el => el.remove())
-  if (programs.length === 0) return
-  const divider = ctxMenu.querySelector('.ctx-divider')
-  programs.forEach(prog => {
-    const item = document.createElement('div')
-    item.className = 'ctx-item'
-    item.dataset.action = 'openin'
-    item.innerHTML = `
-      <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-      <span>Abrir em ${escapeHtml(prog.nome)}</span>`
-    item.addEventListener('click', () => {
-      onSelect(prog)
-      ctxOverlay.classList.remove('active')
-      ctxMenu.classList.remove('active')
-    })
-    ctxMenu.insertBefore(item, divider)
-  })
+window.THREE = THREE
+
+export let isOpen = false
+export let viewerModel = null
+let animId = null
+let cameraReset = false
+let viewerLoaded = false
+let hideViewerTimeout = null
+const resetProgress = { value: 0 }
+const initialCamPos = new THREE.Vector3(3.8, 2.6, 4.8)
+
+const scene = new THREE.Scene()
+const modelContainer = new THREE.Group()
+scene.add(modelContainer)
+
+const camera = new THREE.PerspectiveCamera(40, View.el.viewport.clientWidth / View.el.viewport.clientHeight, 0.1, 50)
+camera.position.copy(initialCamPos)
+
+const renderer = new THREE.WebGLRenderer({
+  antialias: true, alpha: true, powerPreference: 'high-performance',
+})
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+renderer.setSize(View.el.viewport.clientWidth, View.el.viewport.clientHeight)
+renderer.toneMapping = THREE.ACESFilmicToneMapping
+renderer.toneMappingExposure = 1.2
+renderer.shadowMap.enabled = true
+renderer.shadowMap.type = THREE.PCFSoftShadowMap
+renderer.outputColorSpace = THREE.SRGBColorSpace
+View.el.viewport.prepend(renderer.domElement)
+
+const controls = new OrbitControls(camera, renderer.domElement)
+controls.target.set(0, 0.55, 0)
+controls.enableDamping = true
+controls.dampingFactor = 0.08
+controls.rotateSpeed = 0.8
+controls.zoomSpeed = 1.0
+controls.panSpeed = 0.5
+controls.minDistance = 1.8
+controls.maxDistance = 12
+controls.maxPolarAngle = Math.PI * 0.85
+controls.autoRotate = true
+controls.autoRotateSpeed = 1.8
+controls.update()
+
+new ResizeObserver(() => {
+  const w = View.el.viewport.clientWidth
+  const h = View.el.viewport.clientHeight
+  if (w === 0 || h === 0) return
+  camera.aspect = w / h
+  camera.updateProjectionMatrix()
+  renderer.setSize(w, h, false)
+}).observe(View.el.viewport)
+
+const keyLight = new THREE.DirectionalLight(0xffeedd, 1.6)
+keyLight.position.set(5, 7, 5)
+keyLight.castShadow = true
+keyLight.shadow.mapSize.width = 2048
+keyLight.shadow.mapSize.height = 2048
+keyLight.shadow.camera.near = 0.5
+keyLight.shadow.camera.far = 18
+keyLight.shadow.camera.left = -4
+keyLight.shadow.camera.right = 4
+keyLight.shadow.camera.top = 4
+keyLight.shadow.camera.bottom = -4
+keyLight.shadow.bias = -0.0005
+keyLight.shadow.radius = 4
+scene.add(keyLight)
+
+scene.add(new THREE.DirectionalLight(0xccddff, 0.5).position.set(-4, 2, -3))
+scene.add(new THREE.DirectionalLight(0xffffff, 0.35).position.set(0, -1, 7))
+scene.add(new THREE.DirectionalLight(0xffffff, 0.25).position.set(0, 9, 0))
+scene.add(new THREE.AmbientLight(0x333344, 0.2))
+scene.add(new THREE.HemisphereLight(0x444466, 0x222222, 0.35))
+
+function addShadowGround() {
+  const g = new THREE.Mesh(
+    new THREE.CircleGeometry(4.5, 32),
+    new THREE.ShadowMaterial({ opacity: 0.35, color: 0x000000 })
+  )
+  g.rotation.x = -Math.PI / 2
+  g.position.y = -0.03
+  g.receiveShadow = true
+  scene.add(g)
 }
+
+function clearProceduralModel() {
+  while (modelContainer.children.length > 0) {
+    const c = modelContainer.children[0]
+    if (c.geometry) c.geometry.dispose()
+    if (c.material) c.material.dispose()
+    modelContainer.remove(c)
+  }
+}
+
+function buildProceduralSofa() {
+  const g = new THREE.Group()
+  const dk = new THREE.MeshPhysicalMaterial({ color: 0x2C2824, roughness: 0.6, metalness: 0 })
+  const md = new THREE.MeshPhysicalMaterial({ color: 0x4A4036, roughness: 0.7, metalness: 0 })
+  const lt = new THREE.MeshPhysicalMaterial({ color: 0x3D352E, roughness: 0.65, metalness: 0 })
+  const ml = new THREE.MeshPhysicalMaterial({ color: 0x1a1a1a, roughness: 0.2, metalness: 0.9 })
+  const p1 = new THREE.MeshPhysicalMaterial({ color: 0x8B7355, roughness: 0.75, metalness: 0, clearcoat: 0.1 })
+  const p2 = new THREE.MeshPhysicalMaterial({ color: 0x5C6B5A, roughness: 0.75, metalness: 0, clearcoat: 0.1 })
+
+  const base = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.2, 1.6), dk)
+  base.position.y = 0.1
+  base.castShadow = true; base.receiveShadow = true
+  g.add(base)
+
+  const seatGeo = new RoundedBoxGeometry(0.8, 0.28, 1.22, 4, 0.08)
+  for (const x of [-0.86, 0, 0.86]) {
+    const s = new THREE.Mesh(seatGeo, md)
+    s.position.set(x, 0.38, 0)
+    s.castShadow = true; s.receiveShadow = true
+    g.add(s)
+  }
+
+  const back = new THREE.Mesh(new RoundedBoxGeometry(2.6, 0.85, 0.26, 4, 0.06), lt)
+  back.position.set(0, 0.74, -0.67)
+  back.castShadow = true; back.receiveShadow = true
+  g.add(back)
+
+  const armGeo = new RoundedBoxGeometry(0.2, 0.5, 1.32, 4, 0.05)
+  for (const x of [-1.35, 1.35]) {
+    const a = new THREE.Mesh(armGeo, dk)
+    a.position.set(x, 0.45, 0)
+    a.castShadow = true; a.receiveShadow = true
+    g.add(a)
+  }
+
+  const legGeo = new THREE.CylinderGeometry(0.055, 0.07, 0.14, 12)
+  for (const p of [[-1.25, 0.07, -0.7], [1.25, 0.07, -0.7], [-1.25, 0.07, 0.7], [1.25, 0.07, 0.7]]) {
+    const l = new THREE.Mesh(legGeo, ml)
+    l.position.set(p[0], p[1], p[2])
+    l.castShadow = true; l.receiveShadow = true
+    g.add(l)
+  }
+
+  const pg = new RoundedBoxGeometry(0.36, 0.36, 0.1, 4, 0.07)
+  const a = new THREE.Mesh(pg, p1)
+  a.position.set(-0.5, 0.6, 0.48)
+  a.rotation.z = 0.06
+  a.castShadow = true; a.receiveShadow = true
+  g.add(a)
+
+  const b = new THREE.Mesh(pg, p2)
+  b.position.set(0.5, 0.6, 0.48)
+  b.rotation.z = -0.04
+  b.castShadow = true; b.receiveShadow = true
+  g.add(b)
+
+  return g
+}
+
+async function initViewer() {
+  if (viewerLoaded) return
+  viewerLoaded = true
+  View.el.loadingEl.classList.remove('hidden')
+  addShadowGround()
+  modelContainer.add(buildProceduralSofa())
+  await new Promise(r => setTimeout(r, 600))
+  View.el.loadingEl.classList.add('hidden')
+}
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
+}
+
+function resetCamera() {
+  controls.autoRotate = false
+  cameraReset = true
+  resetProgress.value = 0
+}
+
+function animate() {
+  if (!isOpen) return
+  animId = requestAnimationFrame(animate)
+
+  if (cameraReset) {
+    resetProgress.value = Math.min(resetProgress.value + 0.025, 1)
+    const t = easeInOutCubic(resetProgress.value)
+    camera.position.lerpVectors(camera.position.clone(), initialCamPos, t)
+    controls.target.lerp(new THREE.Vector3(0, 0.55, 0), t * 0.08)
+    if (resetProgress.value >= 1) {
+      cameraReset = false
+      controls.autoRotate = true
+    }
+  }
+
+  controls.update()
+  renderer.render(scene, camera)
+}
+
+export async function openViewer3D(model) {
+  viewerModel = model
+  View.el.modalAssetName.textContent = model.nome + ' · 3D Model'
+  View.el.modalAuthor.textContent = model.autor
+  View.hideViewerMessage()
+  View.el.modalOverlay.classList.add('active')
+  isOpen = true
+  await initViewer()
+
+  let file = model.importedFile
+  if (!file && model.storagePath) {
+    View.showToast('Baixando arquivo do servidor...', 'info')
+    file = await Model.obterArquivoModelo(model)
+  }
+  if (file) {
+    const ext = file.name.split('.').pop().toLowerCase()
+    let loadedScene = null
+
+    try {
+      View.el.loadingEl.classList.remove('hidden')
+
+      if (ext === 'gltf' || ext === 'glb') {
+        const url = URL.createObjectURL(file)
+        const gltf = await new GLTFLoader().loadAsync(url)
+        URL.revokeObjectURL(url)
+        loadedScene = gltf.scene
+      } else if (ext === 'obj') {
+        const { OBJLoader } = await import('three/addons/loaders/OBJLoader.js')
+        const url = URL.createObjectURL(file)
+        loadedScene = await new OBJLoader().loadAsync(url)
+        URL.revokeObjectURL(url)
+      } else if (ext === 'fbx') {
+        const { FBXLoader } = await import('three/addons/loaders/FBXLoader.js')
+        const url = URL.createObjectURL(file)
+        loadedScene = await new FBXLoader().loadAsync(url)
+        URL.revokeObjectURL(url)
+      }
+
+      if (loadedScene) {
+        clearProceduralModel()
+        loadedScene.scale.set(2, 2, 2)
+        loadedScene.traverse(c => {
+          if (c.isMesh) {
+            c.castShadow = true
+            c.receiveShadow = true
+            if (!c.material || c.material.type === 'MeshBasicMaterial') {
+              c.material = new THREE.MeshStandardMaterial({
+                color: c.material?.color || 0xcccccc,
+                roughness: 0.5, metalness: 0.1,
+              })
+            }
+          }
+        })
+        modelContainer.add(loadedScene)
+        const box = new THREE.Box3().setFromObject(loadedScene)
+        const size = box.getSize(new THREE.Vector3()).length()
+        const center = box.getCenter(new THREE.Vector3())
+        controls.target.copy(center)
+        camera.position.set(center.x + size * 1.2, center.y + size * 0.7, center.z + size * 1.5)
+        controls.update()
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar:', err)
+    }
+
+    setTimeout(() => View.el.loadingEl.classList.add('hidden'), 200)
+
+    if (!loadedScene) {
+      clearProceduralModel()
+      View.showViewerMessage(
+        ext === 'blend'
+          ? 'Arquivos .blend não podem ser visualizados no navegador.'
+          : `Visualização de .${ext} não disponível. Exporte para .glb.`,
+        '.' + ext
+      )
+    }
+  }
+
+  animate()
+}
+
+export function closeModal() {
+  View.el.modalOverlay.classList.remove('active')
+  isOpen = false
+  View.hideViewerMessage()
+  if (hideViewerTimeout) { clearTimeout(hideViewerTimeout); hideViewerTimeout = null }
+  if (animId) { cancelAnimationFrame(animId); animId = null }
+}
+
+// Event listeners do visualizador 3D
+View.el.closeBtn.addEventListener('click', closeModal)
+View.el.modalOverlay.addEventListener('click', e => { if (e.target === View.el.modalOverlay) closeModal() })
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && isOpen) closeModal() })
+
+controls.addEventListener('start', () => { controls.autoRotate = false })
+controls.addEventListener('end', () => {
+  setTimeout(() => { if (isOpen) controls.autoRotate = true }, 3000)
+})
