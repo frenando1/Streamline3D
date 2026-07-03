@@ -79,17 +79,7 @@ cd ..
 
 ```
 
-### 2. Variáveis Globais
-
-Crie um arquivo `.env` na raiz do projeto com os endpoints do seu cluster:
-
-```env
-VITE_SUPABASE_URL=[https://seu-subdominio.supabase.co](https://seu-subdominio.supabase.co)
-VITE_SUPABASE_ANON_KEY=sua_chave_publica_anonima
-
-```
-
-### 3. Rodando o Ambiente
+### 2. Rodando o Ambiente
 
 Inicie os servidores em instâncias separadas do seu terminal para monitorar os logs:
 
@@ -147,4 +137,4 @@ blender -b -P backend/conversor.py -- <input.blend> <output.glb>
 
 ## 📄 Licença
 
-Este ecossistema está protegido sob as diretrizes das licenças **MIT**. Sinta-se livre para customizar, expandir e integrar em sua própria pipeline de arte 3D!
+Este ecossistema está protegido sob as diretrizes das licenças **MIT**.
