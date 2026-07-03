@@ -1,10 +1,4 @@
-Esse repositório foi criado e o seu histórico agora está 100% limpo, leve e pronto para receber o `README.md` completo e estilizado que montamos!
 
-Como você já fez o *force push* com sucesso, a estrutura no GitHub está organizada exatamente como planejamos: sem arquivos gigantes travando o terminal e com as pastas divididas perfeitamente entre o Frontend em Vite e o Backend de conversão em Node/Blender.
-
-Para finalizar com chave de ouro e deixar a página inicial do seu repositório `https://github.com/frenando1/Streamline3D` impecável (no nível do *Dream Textures*), basta copiar o código markdown abaixo, salvar como `README.md` na raiz do seu projeto local e dar um push normal:
-
-```markdown
 # 🧊 Streamline 3D — Gerenciador Inteligente de Assets
 
 <p align="center">
