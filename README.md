@@ -49,7 +49,7 @@ Streamline3D/
 ├── index.html                 # Ponto de entrada do app (HTML5 estrutural)
 ├── .env                       # Variáveis de ambiente privativas
 └── package.json               # Gerenciador de scripts e dependências da stack
-
+```
 ---
 
 ## 🛠️ Pré-requisitos
