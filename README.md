@@ -135,6 +135,29 @@ blender -b -P backend/conversor.py -- <input.blend> <output.glb>
 
 ---
 
+## ⚡ Tecnologias Utilizadas
+
+O **Streamline 3D** foi construído utilizando uma stack moderna e modular, dividida entre uma interface de alta performance voltada para a web e um microsserviço otimizado para tarefas de automação tridimensional e sincronização.
+
+### 🎨 Frontend (Client-Side)
+* **[Three.js](https://threejs.org/) & Addons:** Engine gráfica utilizada para criar a cena 3D nativa no navegador, utilizando o `GLTFLoader` para renderização de malhas complexas, `OrbitControls` para navegação imersiva e `RoundedBoxGeometry` para componentes procedurais.
+* **Vanilla JavaScript (ES6+):** Arquitetura purista baseada em módulos nativos (`import`/`export`) estruturada estritamente sob o padrão **MVC (Model-View-Controller)** para separar o ciclo de vida dos dados da renderização da interface.
+* **CSS3 Avançado:** Interface responsiva construída do zero utilizando *CSS Grid* e *Flexbox*, contando com variáveis globais (*Custom Properties*) para gerenciamento dinâmico do tema Dark Mode.
+* **[Vite](https://vitejs.dev/):** Ferramenta de build ultra-rápida utilizada como bundler de desenvolvimento e responsável por otimizar e compilar os assets estáticos para produção.
+
+### ⚙️ Backend (Server-Side) & Microservices
+* **[Node.js](https://nodejs.org/) & Express:** Servidor HTTP escalável responsável por gerenciar os endpoints da API, fluxo de upload de arquivos pesados e chamadas assíncronas do sistema.
+* **Multer:** Middleware de manipulação que gerencia o recebimento de arquivos em tempo de execução (`multipart/form-data`) diretamente na memória ou em diretórios temporários.
+* **[Blender Python API (bpy)](https://docs.blender.org/api/current/index.html):** Módulo interno do Blender utilizado via terminal (*headless mode*) pelo script `conversor.py` para carregar dados nativos e gerar arquivos `.glb` otimizados de forma 100% autônoma.
+
+### ☁️ Infraestrutura & Persistência
+* **[Supabase](https://supabase.com/):** Plataforma de infraestrutura *Backend-as-a-Service* (BaaS). Atua diretamente em duas frentes cruciais:
+    * **Supabase Database (PostgreSQL):** Gerenciamento e relacionamento de metadados dos assets, categorias e coleções.
+    * **Supabase Auth:** Controle de sessão criptografado, lidando com registro, login e redefinição de senhas com tokens JWT.
+* **[Rclone](https://rclone.org/):** Utilitário de linha de comando integrado diretamente ao backend do app para realizar conexões seguras e sincronizar grandes volumes de arquivos diretamente para storages em nuvem (como Google Drive, AWS S3 ou OneDrive).
+
+---
+
 ## 📄 Licença
 
 Este ecossistema está protegido sob as diretrizes das licenças **MIT**.
