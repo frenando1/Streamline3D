@@ -163,8 +163,4 @@ O **Streamline 3D** utiliza uma stack moderna estruturada especificamente para a
 
 ## 📄 Licença
 
-Este ecossistema está sob as diretrizes das licenças **MIT** e **CC-BY-SA**. Sinta-se livre para customizar, expandir e integrar em sua própria pipeline de desenvolvimento de arte 3D!
-
-```
-
-```
+Este ecossistema está sob as diretrize da licença **MIT**. Sinta-se livre para customizar, expandir e integrar em sua própria pipeline de desenvolvimento de arte 3D!
