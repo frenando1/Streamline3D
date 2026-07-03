@@ -147,8 +147,4 @@ blender -b -P backend/conversor.py -- <input.blend> <output.glb>
 
 ## 📄 Licença
 
-Este ecossistema está protegido sob as diretrizes das licenças **MIT** e **CC-BY-SA**. Sinta-se livre para customizar, expandir e integrar em sua própria pipeline de arte 3D!
-
-```
-
-```
+Este ecossistema está protegido sob as diretrizes das licenças **MIT**. Sinta-se livre para customizar, expandir e integrar em sua própria pipeline de arte 3D!
