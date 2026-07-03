@@ -1,8 +1,4 @@
-Se você quer deixar o repositório do seu projeto com uma identidade visual marcante e um nível de documentação profissional comparável ao **Dream Textures**, o segredo está em organizar as seções com ícones claros, badges explicativos, bloco de arquitetura bem desenhado e um guia visual de como a ferramenta funciona passo a passo.
 
-Aqui está o seu `README.md` atualizado e elevado a esse nível de apresentação:
-
-```markdown
 # 🧊 Streamline 3D — Gerenciador Inteligente de Assets
 
 <p align="center">
@@ -53,8 +49,6 @@ Streamline3D/
 ├── index.html                 # Ponto de entrada do app (HTML5 estrutural)
 ├── .env                       # Variáveis de ambiente privativas
 └── package.json               # Gerenciador de scripts e dependências da stack
-
-```
 
 ---
 
