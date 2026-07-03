@@ -8,15 +8,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-      "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2"
-    }
-  }
-  </script>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -27,6 +18,14 @@
         <img src="img/Gemini_Generated_Image_7z15la7z15la7z15-removebg-preview.png" alt="Streamline 3D Logo">
       </div>
       <div id="categoryList"></div>
+      <div class="sidebar-divider"></div>
+      <div class="sidebar-section">
+        <div class="sidebar-section-header">
+          <span>Coleções</span>
+          <button id="addColecaoBtn" class="sidebar-add-btn" title="Nova coleção">+</button>
+        </div>
+        <div id="colecaoList"></div>
+      </div>
     </aside>
 
     <div id="main">
@@ -55,6 +54,9 @@
             <option value=".fbx">.fbx</option>
             <option value=".gltf">.gltf/.glb</option>
             <option value=".obj">.obj</option>
+          </select>
+          <select id="filterColecao">
+            <option value="todas">Todas as coleções</option>
           </select>
         </div>
         <div class="toolbar">
@@ -87,11 +89,16 @@
       <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       <span>Converter para glTF</span>
     </div>
-    <div class="ctx-item" data-action="download">
-      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      <span>Download</span>
-    </div>
-    <div class="ctx-divider"></div>
+      <div class="ctx-item" data-action="download">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>Download</span>
+      </div>
+      <div class="ctx-item ctx-collection-action" data-action="add-to-colecao">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>Adicionar à coleção</span>
+      </div>
+      <div id="ctxColecaoSubmenu" class="ctx-submenu"></div>
+      <div class="ctx-divider"></div>
     <div class="ctx-item danger" data-action="delete">
       <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
       <span>Excluir</span>
@@ -219,6 +226,38 @@
           </div>
           <input type="file" id="importTxtInput" hidden accept=".txt" />
         </div>
+        <div class="settings-section settings-rclone">
+          <h4>Sincronização Rclone</h4>
+          <p class="setting-note">Sincronize automaticamente seus modelos com a nuvem via Rclone ao importar.</p>
+          <div class="field toggle-field">
+            <label class="toggle-row">
+              <span>Ativar sincronização automática</span>
+              <label class="switch">
+                <input type="checkbox" id="rcloneEnabled" />
+                <span class="slider"></span>
+              </label>
+            </label>
+          </div>
+          <div class="field rclone-config-fields">
+            <div class="ludusavi-header-inline">
+              <label style="margin: 0;">Remotes do Rclone</label>
+              <button type="button" id="rcloneRefreshBtn" class="ludusavi-mini-btn" title="Atualizar Lista">🔄 Recarregar</button>
+            </div>
+            <input type="hidden" id="rcloneRemote" value="gdrive" />
+            <div id="rcloneRemotesContainer" class="ludusavi-container">
+              <p class="loading-text">A procurar remotes configurados...</p>
+            </div>
+          </div>
+          <div class="field rclone-config-fields">
+            <label for="rclonePath">Pasta no Remote (opcional)</label>
+            <input type="text" id="rclonePath" placeholder="Ex: Streamline3D/Backups" />
+          </div>
+          <div id="rcloneStatus" class="rclone-status"></div>
+          <div class="rclone-actions">
+            <button id="rcloneTestBtn" class="settings-btn">Testar conexão</button>
+            <button id="rcloneSaveBtn" class="settings-btn primary">Salvar configuração</button>
+          </div>
+        </div>
         <div class="settings-section settings-external">
           <h4>Programas 3D Externos</h4>
           <p class="setting-note">Configure programas 3D para abrir assets diretamente.</p>
@@ -232,6 +271,45 @@
             <button id="programAddBtn" class="settings-btn primary" disabled>Adicionar</button>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="colecaoDialogOverlay">
+    <div id="colecaoDialog">
+      <div class="dialog-header">
+        <h3 id="colecaoDialogTitle">Nova Coleção</h3>
+      </div>
+      <div class="dialog-body">
+        <div class="field">
+          <label for="colecaoNome">Nome</label>
+          <input type="text" id="colecaoNome" placeholder="Nome da coleção" />
+        </div>
+        <div class="field">
+          <label for="colecaoDescricao">Descrição</label>
+          <input type="text" id="colecaoDescricao" placeholder="Descrição opcional" />
+        </div>
+        <div class="field">
+          <label for="colecaoCor">Cor</label>
+          <div class="color-picker-row">
+            <input type="color" id="colecaoCor" value="#6C5CE7" />
+            <div class="color-presets">
+              <button class="color-preset" data-cor="#6C5CE7" style="background:#6C5CE7"></button>
+              <button class="color-preset" data-cor="#5B8DEF" style="background:#5B8DEF"></button>
+              <button class="color-preset" data-cor="#4CAF50" style="background:#4CAF50"></button>
+              <button class="color-preset" data-cor="#FF7043" style="background:#FF7043"></button>
+              <button class="color-preset" data-cor="#FFC107" style="background:#FFC107"></button>
+              <button class="color-preset" data-cor="#AB47BC" style="background:#AB47BC"></button>
+              <button class="color-preset" data-cor="#e74c3c" style="background:#e74c3c"></button>
+              <button class="color-preset" data-cor="#1abc9c" style="background:#1abc9c"></button>
+            </div>
+          </div>
+        </div>
+        <input type="hidden" id="colecaoEditId" value="" />
+      </div>
+      <div class="dialog-actions">
+        <button id="colecaoDialogCancel">Cancelar</button>
+        <button id="colecaoDialogConfirm">Criar</button>
       </div>
     </div>
   </div>
@@ -255,7 +333,19 @@
           <label for="loginPassword">Senha</label>
           <input type="password" id="loginPassword" placeholder="••••••••" />
         </div>
+        <div class="field" style="margin-top:-8px">
+          <button id="loginForgotBtn" class="btn-link btn-forgot">Esqueci a senha</button>
+        </div>
         <div id="loginError" class="login-error" style="display:none"></div>
+        <div id="loginResetMessage" class="login-error login-success" style="display:none"></div>
+        <div class="field" id="loginNewPasswordField" style="display:none">
+          <label for="loginNewPassword">Nova senha</label>
+          <input type="password" id="loginNewPassword" placeholder="Mínimo 6 caracteres" />
+        </div>
+        <div class="field" id="loginNewPasswordConfirmField" style="display:none">
+          <label for="loginNewPasswordConfirm">Confirmar senha</label>
+          <input type="password" id="loginNewPasswordConfirm" placeholder="Repita a nova senha" />
+        </div>
       </div>
       <div class="dialog-actions">
         <button id="loginCancel">Cancelar</button>
@@ -267,6 +357,6 @@
 
   <div id="toast"></div>
  
-  <script type="module" src="js/controller.js"></script>
+  <script type="module" src="/js/controller.js"></script>
 </body>
 </html>

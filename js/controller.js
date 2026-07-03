@@ -1,6 +1,5 @@
 import { Model } from './model.js'
-import { View } from './view.js'
-import { openViewer3D, closeModal, viewerModel } from './view.js'
+import { View, openViewer3D, closeModal, viewerModel } from './view.js'
 
 const Controller = {
   ctxModel: null,
@@ -11,6 +10,7 @@ const Controller = {
     const lic = View.el.filterLicenca.value
     const fmt = View.el.filterFormato.value
     const outros = View.el.filterOutros.value
+    const colecaoId = View.el.filterColecao.value
 
     const filtrados = Model.models.filter(m => {
       if (cat !== 'todas' && m.categoria !== cat) return false
@@ -18,6 +18,10 @@ const Controller = {
       if (fmt !== 'todos' && m.formato !== fmt) return false
       if (outros === 'download' && !m.disponivelDownload) return false
       if (outros === 'animacao' && !m.animacao) return false
+      if (colecaoId !== 'todas') {
+        const colecoes = Model.assetColecoes.get(m.id)
+        if (!colecoes || !colecoes.has(colecaoId)) return false
+      }
       return true
     })
     Controller.renderGrid(filtrados)
@@ -38,6 +42,11 @@ const Controller = {
         if (convertItem) convertItem.classList.toggle('show', model.formato === '.blend' && (!!model.importedFile || !!model.storagePath))
         const downloadItem = View.el.ctxMenu.querySelector('.ctx-item[data-action="download"]')
         if (downloadItem) downloadItem.classList.toggle('show', !!model.importedFile || !!model.storagePath)
+        const addToColecaoItem = View.el.ctxMenu.querySelector('.ctx-item[data-action="add-to-colecao"]')
+        if (addToColecaoItem) {
+          addToColecaoItem.style.display = Model.colecoes.length > 0 ? 'flex' : 'none'
+        }
+        View.el.ctxColecaoSubmenu.classList.remove('active')
         const x = Math.min(e.clientX, innerWidth - 160)
         const y = Math.min(e.clientY, innerHeight - 100)
         View.el.ctxMenu.style.left = x + 'px'
@@ -49,45 +58,68 @@ const Controller = {
     })
   },
 
-  confirmImport() {
+  async confirmImport() {
     if (!Controller.pendingFile) return
-    const name = View.el.dialogName.value.trim() || 'Sem nome'
-    const cat = View.el.dialogCategory.value
-    const lic = View.el.dialogLicense.value
-    const parts = Controller.pendingFile.name.split('.')
-    const ext = '.' + parts.pop().toLowerCase()
-    const grad = Model.thumbnailGradients[Model.models.length % Model.thumbnailGradients.length]
 
-    const model = {
-      id: Date.now(),
-      nome: name,
-      autor: 'importado',
-      categoria: cat,
-      licenca: lic,
-      formato: ext,
-      disponivelDownload: true,
-      animacao: false,
-      thumbnailGrad: grad,
-      importedFile: Controller.pendingFile,
+    View.el.loadingEl.classList.remove('hidden')
+    View.showToast('A importar asset...', 'loading')
+
+    try {
+      const name = View.el.dialogName.value.trim() || 'Sem nome'
+      const cat = View.el.dialogCategory.value
+      const lic = View.el.dialogLicense.value
+      const parts = Controller.pendingFile.name.split('.')
+      const ext = '.' + parts.pop().toLowerCase()
+      const grad = Model.thumbnailGradients[Model.models.length % Model.thumbnailGradients.length]
+
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.readAsDataURL(Controller.pendingFile)
+        reader.onloadend = () => resolve(reader.result)
+        reader.onerror = () => reject(reader.error)
+      })
+
+      const linhaTexto = `id=${Date.now()} "${name}" {"${base64}"} P="${ext}"`
+
+      const model = {
+        id: crypto.randomUUID(),
+        nome: name,
+        autor: Model.currentUser ? Model.currentUser.name : 'importado',
+        categoria: cat,
+        licenca: lic,
+        formato: ext,
+        tamanho: (Controller.pendingFile.size / (1024 * 1024)).toFixed(2) + ' MB',
+        disponivelDownload: true,
+        animacao: false,
+        thumbnailGrad: grad,
+        importedFile: Controller.pendingFile,
+        conteudo_texto: linhaTexto,
+      }
+
+      Model.models.unshift(model)
+
+      if (Model.currentUser) {
+        await Model.salvarModelo(model).catch(e => View.showToast('Erro ao salvar: ' + e.message, 'error'))
+      }
+
+      View.closeImportDialog()
+      Controller.pendingFile = null
+      Controller.applyFilters()
+      const ativa = document.querySelector('.cat-item.active')
+      View.renderSidebar(Model.categories, Model.models, ativa ? ativa.dataset.categoria : 'models')
+      View.renderColecoes(Model.colecoes, null)
+
+      if (Model.currentUser && Model.rcloneConfig.enabled) {
+        Controller.salvarModelosNoDrive().catch(e => console.warn('Auto-sync falhou:', e))
+      }
+
+      View.el.loadingEl.classList.add('hidden')
+      View.showToast(`"${name}${ext}" importado com sucesso`)
+      document.getElementById('gridWrapper').scrollTop = 0
+    } catch (err) {
+      View.el.loadingEl.classList.add('hidden')
+      View.showToast('Erro ao importar: ' + err.message, 'error')
     }
-
-    Model.models.unshift(model)
-
-    if (Model.currentUser) {
-      Model.salvarModelo(model).catch(e => View.showToast('Erro ao salvar: ' + e.message, 'error'))
-    }
-
-    View.closeImportDialog()
-    Controller.pendingFile = null
-    View.el.filterCategoria.value = 'todas'
-    View.el.filterFormato.value = 'todos'
-    View.el.filterLicenca.value = 'todas'
-    View.el.filterOutros.value = 'todos'
-    Controller.applyFilters()
-    const ativa = document.querySelector('.cat-item.active')
-    View.renderSidebar(Model.categories, Model.models, ativa ? ativa.dataset.categoria : 'models')
-    View.showToast(`"${name}${ext}" importado com sucesso`)
-    document.getElementById('gridWrapper').scrollTop = 0
   },
 
   async convertBlendToGLTF(model) {
@@ -222,7 +254,62 @@ pause`
     if (msg.includes('Email not confirmed')) return 'Confirme seu e-mail antes de entrar'
     if (msg.includes('User already registered')) return 'Este e-mail já está cadastrado'
     if (msg.includes('Password should be')) return 'Senha muito curta (mínimo 6 caracteres)'
+    if (msg.includes('Invalid email')) return 'E-mail inválido'
+    if (msg.includes('rate limit')) return 'Muitas tentativas. Aguarde alguns minutos.'
     return msg || 'Erro inesperado. Tente novamente.'
+  },
+
+  async handleForgotPassword() {
+    View.showResetView()
+  },
+
+  async handleSendResetLink() {
+    const email = View.el.loginEmail.value.trim()
+    if (!email) {
+      View.showLoginError('Digite seu e-mail')
+      return
+    }
+    View.el.loginConfirm.disabled = true
+    View.el.loginConfirm.textContent = 'Enviando...'
+    try {
+      await Model.resetPasswordForEmail(email)
+      View.showResetMessage('Link de recuperação enviado! Verifique seu e-mail.')
+    } catch (err) {
+      View.showResetMessage(Controller.tratarErroSupabase(err), true)
+    } finally {
+      View.el.loginConfirm.disabled = false
+      View.el.loginConfirm.textContent = 'Enviar link'
+    }
+  },
+
+  async handleResetPassword() {
+    const newPassword = View.el.loginNewPassword.value.trim()
+    const confirmPassword = View.el.loginNewPasswordConfirm.value.trim()
+    if (!newPassword || newPassword.length < 6) {
+      View.showResetMessage('A senha deve ter no mínimo 6 caracteres', true)
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      View.showResetMessage('As senhas não coincidem', true)
+      return
+    }
+    View.el.loginConfirm.disabled = true
+    View.el.loginConfirm.textContent = 'Redefinindo...'
+    try {
+      await Model.updatePassword(newPassword)
+      View.showResetMessage('Senha redefinida com sucesso!')
+      setTimeout(() => {
+        const email = Model.currentUser?.email || ''
+        View.showLoginView()
+        if (email) View.el.loginEmail.value = email
+        View.showToast('Senha redefinida! Faça login com sua nova senha.')
+      }, 1500)
+    } catch (err) {
+      View.showResetMessage(Controller.tratarErroSupabase(err), true)
+    } finally {
+      View.el.loginConfirm.disabled = false
+      View.el.loginConfirm.textContent = 'Redefinir Senha'
+    }
   },
 
   async init() {
@@ -241,15 +328,66 @@ pause`
     }
     View.updateLoginUI(Model.currentUser)
 
+    try {
+      await Model.carregarColecoes()
+      View.renderColecoes(Model.colecoes, Model.colecaoAtiva)
+      View.populateColecaoFilter(Model.colecoes)
+    } catch (e) {
+      console.warn('Coleções não carregadas:', e.message)
+    }
+
+    if (Model.hasRecoveryToken()) {
+      try {
+        await Model.getSession()
+        if (Model.currentUser) {
+          View.updateLoginUI(Model.currentUser)
+          View.openLoginDialog()
+          View.showNewPasswordView()
+          View.showToast('Defina uma nova senha para sua conta')
+        }
+      } catch (e) {
+        console.warn('Erro ao processar token de recuperação:', e.message)
+        View.showToast('Link de recuperação inválido ou expirado', 'error')
+      }
+      window.location.hash = ''
+    }
+
     if (Model.currentUser) {
       try {
-        await Model.carregarModelos()
-        Controller.applyFilters()
-        const ativa = document.querySelector('.cat-item.active')
-        View.renderSidebar(Model.categories, Model.models, ativa ? ativa.dataset.categoria : 'models')
+        View.showToast('Sincronizando com Google Drive...', 'loading')
+
+        const initRes = await fetch('http://localhost:3000/api/auth/session-init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: Model.currentUser.id })
+        })
+        const initData = await initRes.json()
+        if (initData.success) {
+          Model.rcloneConfig.remote = initData.remoteName
+          Model.salvarConfig()
+        }
+
+        const response = await fetch(`http://localhost:3000/api/drive/download/${Model.currentUser.id}`)
+        const data = await response.json()
+
+        if (data.conteudoTexto && data.conteudoTexto.trim() !== '') {
+          const modelosRecuperados = Model.importarModelosDoTexto(data.conteudoTexto)
+          if (modelosRecuperados && modelosRecuperados.length > 0) {
+            Model.models.length = 0
+            Model.models.push(...modelosRecuperados)
+            View.showToast('Biblioteca restaurada do Google Drive! 💾')
+          }
+        } else {
+          await Model.carregarModelos()
+        }
       } catch (e) {
-        console.warn('Modelos não carregados:', e.message)
+        console.error('Falha no rclone, recorrendo ao Supabase:', e)
+        await Model.carregarModelos()
       }
+
+      Controller.applyFilters()
+      const ativa = document.querySelector('.cat-item.active')
+      View.renderSidebar(Model.categories, Model.models, ativa ? ativa.dataset.categoria : 'models')
     }
 
     Model.onAuthChange((user) => {
@@ -258,13 +396,237 @@ pause`
 
     console.log('✅ Streamline 3D carregado!')
   },
+
+  testarRclone() {
+    const btn = View.el.rcloneTestBtn
+    btn.disabled = true
+    btn.textContent = 'Testando...'
+    View.el.rcloneStatus.className = 'rclone-status'
+    View.el.rcloneStatus.textContent = ''
+
+    return fetch('http://localhost:3000/api/drive/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        remoteName: View.el.rcloneRemote.value.trim() || 'gdrive',
+        path: View.el.rclonePath.value.trim(),
+      }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          View.el.rcloneStatus.className = 'rclone-status rclone-ok'
+          View.el.rcloneStatus.textContent = '✅ Conexão estabelecida!'
+        } else {
+          View.el.rcloneStatus.className = 'rclone-status rclone-err'
+          View.el.rcloneStatus.textContent = '❌ ' + (data.error || 'Falha na conexão')
+        }
+      })
+      .catch(err => {
+        View.el.rcloneStatus.className = 'rclone-status rclone-err'
+        View.el.rcloneStatus.textContent = '❌ Servidor não disponível'
+      })
+      .finally(() => {
+        btn.disabled = false
+        btn.textContent = 'Testar conexão'
+      })
+  },
+
+  async salvarModelosNoDrive() {
+    try {
+      if (!Model.currentUser) {
+        View.showToast('Faça login primeiro!', 'error')
+        return
+      }
+
+      View.showToast('Sincronizando modelos com seu Google Drive... ⏳')
+
+      let textoCompleto
+      try {
+        textoCompleto = await Model.exportarModelosParaTexto()
+      } catch (e) {
+        if (e.message.includes('Nenhum modelo com arquivo')) {
+          textoCompleto = ''
+        } else {
+          throw e
+        }
+      }
+
+      await fetch('http://localhost:3000/api/modelos/atualizar-arquivo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conteudoTexto: textoCompleto })
+      })
+
+      const response = await fetch('http://localhost:3000/api/drive/upload-modelos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: Model.currentUser.id })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        View.showToast('Modelos sincronizados com seu Google Drive! ✅')
+      } else {
+        View.showToast('Falha ao sincronizar: ' + data.error, 'error')
+      }
+    } catch (err) {
+      console.error(err)
+      View.showToast('Erro de conexão com o servidor.', 'error')
+    }
+  },
+
+  async carregarRemotesRclone() {
+    try {
+      const res = await fetch('http://localhost:3000/api/drive/remotes');
+      const data = await res.json();
+
+      View.renderRemotesTable(data.remotes || [], Model.rcloneConfig.remote);
+    } catch (err) {
+      console.error('Erro ao listar remotes:', err);
+      if (View.el.rcloneRemotesContainer) {
+        View.el.rcloneRemotesContainer.innerHTML = `<p class="loading-text" style="color:#ff7675;">Falha ao carregar remotes do Rclone.</p>`;
+      }
+    }
+  },
 }
 
+function gerarId() {
+  return crypto.randomUUID ? crypto.randomUUID() : 'col_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9)
+}
+
+// Event listeners - Coleções
+View.el.addColecaoBtn.addEventListener('click', () => {
+  View.openColecaoDialog(null)
+})
+
+View.el.colecaoDialogCancel.addEventListener('click', () => View.closeColecaoDialog())
+View.el.colecaoDialogOverlay.addEventListener('click', e => {
+  if (e.target === View.el.colecaoDialogOverlay) View.closeColecaoDialog()
+})
+View.el.colecaoNome.addEventListener('keydown', e => {
+  if (e.key === 'Enter') View.el.colecaoDialogConfirm.click()
+})
+
+View.el.colecaoDialogConfirm.addEventListener('click', async () => {
+  const nome = View.el.colecaoNome.value.trim()
+  if (!nome) {
+    View.showToast('Digite um nome para a coleção', 'error')
+    return
+  }
+  const editId = View.el.colecaoEditId.value
+  const cor = View.el.colecaoCor.value
+  const descricao = View.el.colecaoDescricao.value.trim()
+
+  if (editId) {
+    const colecao = Model.colecoes.find(c => c.id === editId)
+    if (colecao) {
+      colecao.nome = nome
+      colecao.descricao = descricao
+      colecao.cor = cor
+      try {
+        await Model.atualizarColecao(colecao)
+        View.renderColecoes(Model.colecoes, Model.colecaoAtiva)
+        View.populateColecaoFilter(Model.colecoes)
+        Controller.applyFilters()
+        View.closeColecaoDialog()
+        View.showToast(`Coleção "${nome}" atualizada`)
+      } catch (err) {
+        View.showToast('Erro ao atualizar coleção: ' + err.message, 'error')
+      }
+    }
+  } else {
+    const colecao = {
+      id: gerarId(),
+      nome,
+      descricao,
+      cor,
+    }
+    try {
+      await Model.salvarColecao(colecao)
+      View.renderColecoes(Model.colecoes, Model.colecaoAtiva)
+      View.populateColecaoFilter(Model.colecoes)
+      View.closeColecaoDialog()
+      View.showToast(`Coleção "${nome}" criada`)
+    } catch (err) {
+      View.showToast('Erro ao criar coleção: ' + err.message, 'error')
+    }
+  }
+})
+
+document.addEventListener('edit-colecao', e => {
+  View.openColecaoDialog(e.detail)
+})
+
+document.addEventListener('delete-colecao', async e => {
+  const col = e.detail
+  if (!confirm(`Excluir a coleção "${col.nome}"?\nOs assets permanecem inalterados.`)) return
+  try {
+    await Model.deletarColecao(col)
+    View.renderColecoes(Model.colecoes, Model.colecaoAtiva)
+    View.populateColecaoFilter(Model.colecoes)
+    if (Model.colecaoAtiva === null) View.el.filterColecao.value = 'todas'
+    Controller.applyFilters()
+    View.showToast(`Coleção "${col.nome}" excluída`)
+  } catch (err) {
+    View.showToast('Erro ao excluir coleção: ' + err.message, 'error')
+  }
+})
+
+document.addEventListener('toggle-colecao-asset', async e => {
+  const { colecaoId, assetId, add } = e.detail
+  try {
+    if (add) {
+      await Model.adicionarAssetNaColecao(colecaoId, assetId)
+      View.showToast('Asset adicionado à coleção')
+    } else {
+      await Model.removerAssetDaColecao(colecaoId, assetId)
+      View.showToast('Asset removido da coleção')
+    }
+    Controller.applyFilters()
+    const ativa = document.querySelector('.cat-item.active')
+    View.renderSidebar(Model.categories, Model.models, ativa ? ativa.dataset.categoria : 'models')
+    View.renderColecoes(Model.colecoes, Model.colecaoAtiva)
+    View.el.ctxOverlay.classList.remove('active')
+    View.el.ctxMenu.classList.remove('active')
+    View.el.ctxColecaoSubmenu.classList.remove('active')
+    Controller.ctxModel = null
+  } catch (err) {
+    View.showToast('Erro: ' + err.message, 'error')
+  }
+})
+
+// Color presets
+document.querySelectorAll('.color-preset').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const cor = btn.dataset.cor
+    View.el.colecaoCor.value = cor
+    document.querySelectorAll('.color-preset').forEach(p => p.classList.remove('selected'))
+    btn.classList.add('selected')
+  })
+})
+View.el.colecaoCor.addEventListener('input', () => {
+  document.querySelectorAll('.color-preset').forEach(p => {
+    p.classList.toggle('selected', p.dataset.cor === View.el.colecaoCor.value)
+  })
+})
+
 // Event listeners
-View.el.filterCategoria.addEventListener('change', () => Controller.applyFilters())
+View.el.filterCategoria.addEventListener('change', () => {
+  document.querySelectorAll('.cat-item').forEach(c => c.classList.remove('active'))
+  Controller.applyFilters()
+})
 View.el.filterLicenca.addEventListener('change', () => Controller.applyFilters())
 View.el.filterFormato.addEventListener('change', () => Controller.applyFilters())
 View.el.filterOutros.addEventListener('change', () => Controller.applyFilters())
+View.el.filterColecao.addEventListener('change', () => {
+  const val = View.el.filterColecao.value
+  Model.colecaoAtiva = val === 'todas' ? null : val
+  document.querySelectorAll('.colecao-item').forEach(c => {
+    c.classList.toggle('active', c.dataset.colecaoId === val)
+  })
+  Controller.applyFilters()
+})
 
 View.el.ctxOverlay.addEventListener('click', () => {
   View.el.ctxOverlay.classList.remove('active')
@@ -286,8 +648,13 @@ document.querySelectorAll('#contextMenu .ctx-item[data-action]').forEach(item =>
         Controller.applyFilters()
         const ativa = document.querySelector('.cat-item.active')
         View.renderSidebar(Model.categories, Model.models, ativa ? ativa.dataset.categoria : 'models')
+        View.renderColecoes(Model.colecoes, Model.colecaoAtiva)
         View.showToast(`"${Controller.ctxModel.nome}" excluído`)
       }
+    }
+    if (item.dataset.action === 'add-to-colecao') {
+      View.renderColecaoSubmenu(Model.colecoes, Controller.ctxModel.id)
+      return
     }
     View.el.ctxOverlay.classList.remove('active')
     View.el.ctxMenu.classList.remove('active')
@@ -322,9 +689,6 @@ View.el.themeToggle.addEventListener('click', () => {
   Model.salvarConfig()
 })
 
-View.el.settingsBtn.addEventListener('click', () => {
-  View.el.settingsOverlay.classList.add('active')
-})
 View.el.settingsClose.addEventListener('click', () => View.el.settingsOverlay.classList.remove('active'))
 View.el.settingsOverlay.addEventListener('click', e => {
   if (e.target === View.el.settingsOverlay) View.el.settingsOverlay.classList.remove('active')
@@ -375,7 +739,16 @@ progFileInput.addEventListener('change', () => {
 View.el.exportTxtBtn.addEventListener('click', async () => {
   try {
     View.showToast('Exportando modelos...', 'info')
-    await Model.exportarParaArquivoTexto()
+    const texto = await Model.exportarModelosParaTexto()
+    const blob = new Blob([texto], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'modelos.txt'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
     View.showToast('modelos.txt baixado!')
   } catch (err) {
     View.showToast(err.message || 'Erro na exportação', 'error')
@@ -405,6 +778,9 @@ View.el.importTxtInput.addEventListener('change', async () => {
     const ativa = document.querySelector('.cat-item.active')
     View.renderSidebar(Model.categories, Model.models, ativa ? ativa.dataset.categoria : 'models')
     View.showToast(`${imported.length} modelo(s) importado(s)`)
+    if (Model.currentUser && Model.rcloneConfig.enabled) {
+      Controller.salvarModelosNoDrive().catch(e => console.warn('Auto-sync modelos.txt falhou:', e))
+    }
   } catch (err) {
     View.showToast(err.message || 'Erro na importação', 'error')
   }
@@ -457,8 +833,24 @@ View.el.loginBtn.addEventListener('click', () => {
 
 View.el.loginClose.addEventListener('click', () => View.closeLoginDialog())
 View.el.loginCancel.addEventListener('click', () => View.closeLoginDialog())
-View.el.loginToggleMode.addEventListener('click', () => View.toggleLoginMode())
+View.el.loginToggleMode.addEventListener('click', () => {
+  const mode = View.getLoginMode()
+  if (mode === 'reset' || mode === 'new-password') {
+    View.showLoginView()
+  } else {
+    View.toggleLoginMode()
+  }
+})
 View.el.loginConfirm.addEventListener('click', async () => {
+  const mode = View.getLoginMode()
+  if (mode === 'reset') {
+    await Controller.handleSendResetLink()
+    return
+  }
+  if (mode === 'new-password') {
+    await Controller.handleResetPassword()
+    return
+  }
   View.hideLoginError()
   const email = View.el.loginEmail.value.trim()
   const password = View.el.loginPassword.value.trim()
@@ -479,6 +871,23 @@ View.el.loginConfirm.addEventListener('click', async () => {
       View.closeLoginDialog()
       if (result.session) {
         View.updateLoginUI(Model.currentUser)
+        try {
+          const initRes = await fetch('http://localhost:3000/api/auth/session-init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: Model.currentUser.id, email: Model.currentUser.email })
+          })
+          const initData = await initRes.json()
+          if (initData.success) {
+            Model.rcloneConfig.remote = initData.remoteName
+            Model.salvarConfig()
+            if (initData.needsAuth) {
+              View.showToast('VINCULANDO DRIVE: Permita o acesso na janela que se abriu no seu navegador! 🌐', 'info')
+            }
+          }
+        } catch (e) {
+          console.warn('Session init falhou:', e.message)
+        }
         View.showToast(`Conta criada! Bem-vindo, ${result.name}!`)
       } else {
         View.showToast('Conta criada! Confirme seu e-mail antes de entrar.', 'info')
@@ -492,8 +901,46 @@ View.el.loginConfirm.addEventListener('click', async () => {
       View.closeLoginDialog()
       View.updateLoginUI(Model.currentUser)
       View.showToast(`Bem-vindo, ${Model.currentUser.name}!`)
+
+      let initData
       try {
-        await Model.carregarModelos()
+        const initRes = await fetch('http://localhost:3000/api/auth/session-init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: Model.currentUser.id })
+        })
+        initData = await initRes.json()
+        if (initData.success) {
+          Model.rcloneConfig.remote = initData.remoteName
+          Model.salvarConfig()
+          if (initData.needsAuth) {
+            View.showToast('VINCULANDO DRIVE: Permita o acesso na janela que se abriu no seu navegador! 🌐', 'info')
+          }
+        }
+      } catch (e) {
+        console.warn('Session init falhou:', e.message)
+      }
+
+      try {
+        if (initData && !initData.needsAuth) {
+          const driveRes = await fetch(`http://localhost:3000/api/drive/download/${Model.currentUser.id}`)
+          const driveData = await driveRes.json()
+          if (driveData.conteudoTexto && driveData.conteudoTexto.trim() !== '') {
+            const modelosRecuperados = Model.importarModelosDoTexto(driveData.conteudoTexto)
+            if (modelosRecuperados.length > 0) {
+              Model.models.length = 0
+              Model.models.push(...modelosRecuperados)
+              View.showToast('Biblioteca restaurada do Google Drive! 💾')
+            }
+          } else {
+            await Model.carregarModelos()
+          }
+        } else {
+          await Model.carregarModelos()
+        }
+        await Model.carregarColecoes()
+        View.renderColecoes(Model.colecoes, Model.colecaoAtiva)
+        View.populateColecaoFilter(Model.colecoes)
         Controller.applyFilters()
         const ativa = document.querySelector('.cat-item.active')
         View.renderSidebar(Model.categories, Model.models, ativa ? ativa.dataset.categoria : 'models')
@@ -506,6 +953,8 @@ View.el.loginConfirm.addEventListener('click', async () => {
   }
 })
 
+View.el.loginForgotBtn.addEventListener('click', () => Controller.handleForgotPassword())
+
 View.el.loginDialogOverlay.addEventListener('click', e => {
   if (e.target === View.el.loginDialogOverlay) View.closeLoginDialog()
 })
@@ -515,6 +964,14 @@ View.el.loginPassword.addEventListener('keydown', e => {
 })
 
 View.el.loginUsername.addEventListener('keydown', e => {
+  if (e.key === 'Enter') View.el.loginConfirm.click()
+})
+
+View.el.loginNewPassword.addEventListener('keydown', e => {
+  if (e.key === 'Enter') View.el.loginNewPasswordConfirm.focus()
+})
+
+View.el.loginNewPasswordConfirm.addEventListener('keydown', e => {
   if (e.key === 'Enter') View.el.loginConfirm.click()
 })
 
@@ -539,6 +996,12 @@ View.el.accountLogoutBtn.addEventListener('click', async () => {
   try {
     await Model.logoutUser()
     Model.models.length = 0
+    Model.colecoes = []
+    Model.assetColecoes = new Map()
+    Model.colecaoAtiva = null
+    View.el.filterColecao.value = 'todas'
+    View.renderColecoes([], null)
+    View.populateColecaoFilter([])
     Controller.applyFilters()
     const ativa = document.querySelector('.cat-item.active')
     View.renderSidebar(Model.categories, Model.models, ativa ? ativa.dataset.categoria : 'models')
@@ -551,6 +1014,31 @@ View.el.accountLogoutBtn.addEventListener('click', async () => {
   }
 })
 
+View.el.rcloneEnabled.addEventListener('change', () => {
+  const enabled = View.el.rcloneEnabled.checked
+  const fields = document.querySelectorAll('.rclone-config-fields')
+  fields.forEach(f => f.style.display = enabled ? '' : 'none')
+  if (enabled) Controller.carregarRemotesRclone()
+})
+
+View.el.rcloneSaveBtn.addEventListener('click', () => {
+  Model.rcloneConfig.enabled = View.el.rcloneEnabled.checked
+  Model.rcloneConfig.remote = View.el.rcloneRemote.value.trim() || 'gdrive'
+  Model.rcloneConfig.path = View.el.rclonePath.value.trim()
+  Model.salvarConfig()
+  View.showToast('Configuração Rclone salva!')
+})
+
+View.el.rcloneTestBtn.addEventListener('click', () => Controller.testarRclone())
+
+View.el.rcloneRefreshBtn.addEventListener('click', () => Controller.carregarRemotesRclone())
+
+View.el.settingsBtn.addEventListener('click', () => {
+  View.renderRcloneSettings(Model.rcloneConfig)
+  View.el.settingsOverlay.classList.add('active')
+  Controller.carregarRemotesRclone()
+})
+
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && View.el.importDialogOverlay.classList.contains('active')) {
     View.closeImportDialog()
@@ -558,6 +1046,7 @@ document.addEventListener('keydown', e => {
   }
   if (e.key === 'Escape' && View.el.settingsOverlay.classList.contains('active')) View.el.settingsOverlay.classList.remove('active')
   if (e.key === 'Escape' && View.el.loginDialogOverlay.classList.contains('active')) View.closeLoginDialog()
+  if (e.key === 'Escape' && View.el.colecaoDialogOverlay.classList.contains('active')) View.closeColecaoDialog()
 })
 
 Controller.init()

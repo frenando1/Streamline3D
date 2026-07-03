@@ -1,1 +1,4 @@
 /.opencode
+.env
+node_modules/
+dist/

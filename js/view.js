@@ -77,6 +77,12 @@ export const View = {
     loginConfirm: document.getElementById('loginConfirm'),
     loginClose: document.getElementById('loginClose'),
     loginToggleMode: document.getElementById('loginToggleMode'),
+    loginForgotBtn: document.getElementById('loginForgotBtn'),
+    loginNewPassword: document.getElementById('loginNewPassword'),
+    loginNewPasswordConfirm: document.getElementById('loginNewPasswordConfirm'),
+    loginNewPasswordField: document.getElementById('loginNewPasswordField'),
+    loginNewPasswordConfirmField: document.getElementById('loginNewPasswordConfirmField'),
+    loginResetMessage: document.getElementById('loginResetMessage'),
     loginBtn: document.getElementById('Login'),
     settingsAccount: document.getElementById('settingsAccount'),
     accountAvatar: document.getElementById('accountAvatar'),
@@ -91,6 +97,26 @@ export const View = {
     importTxtBtn: document.getElementById('importTxtBtn'),
     importTxtInput: document.getElementById('importTxtInput'),
     viewerMessage: document.getElementById('viewerMessage'),
+    colecaoList: document.getElementById('colecaoList'),
+    addColecaoBtn: document.getElementById('addColecaoBtn'),
+    filterColecao: document.getElementById('filterColecao'),
+    colecaoDialogOverlay: document.getElementById('colecaoDialogOverlay'),
+    colecaoDialogTitle: document.getElementById('colecaoDialogTitle'),
+    colecaoNome: document.getElementById('colecaoNome'),
+    colecaoDescricao: document.getElementById('colecaoDescricao'),
+    colecaoCor: document.getElementById('colecaoCor'),
+    colecaoEditId: document.getElementById('colecaoEditId'),
+    colecaoDialogCancel: document.getElementById('colecaoDialogCancel'),
+    colecaoDialogConfirm: document.getElementById('colecaoDialogConfirm'),
+    ctxColecaoSubmenu: document.getElementById('ctxColecaoSubmenu'),
+    rcloneEnabled: document.getElementById('rcloneEnabled'),
+    rcloneRemote: document.getElementById('rcloneRemote'),
+    rclonePath: document.getElementById('rclonePath'),
+    rcloneStatus: document.getElementById('rcloneStatus'),
+    rcloneTestBtn: document.getElementById('rcloneTestBtn'),
+    rcloneSaveBtn: document.getElementById('rcloneSaveBtn'),
+    rcloneRefreshBtn: document.getElementById('rcloneRefreshBtn'),
+    rcloneRemotesContainer: document.getElementById('rcloneRemotesContainer'),
   },
 
   showToast(msg, tipo = 'success') {
@@ -132,6 +158,59 @@ export const View = {
     this.el.filterCategoria.value = 'todas'
   },
 
+  populateColecaoFilter(colecoes) {
+    this.el.filterColecao.innerHTML = '<option value="todas">Todas as coleções</option>'
+    colecoes.forEach(col => {
+      const opt = document.createElement('option')
+      opt.value = col.id
+      opt.textContent = col.nome
+      this.el.filterColecao.appendChild(opt)
+    })
+    if (!Model.colecaoAtiva) this.el.filterColecao.value = 'todas'
+  },
+
+  renderColecoes(colecoes, ativaId) {
+    this.el.colecaoList.innerHTML = ''
+    if (colecoes.length === 0) {
+      this.el.colecaoList.innerHTML = '<div class="colecao-list-empty">Nenhuma coleção ainda</div>'
+      return
+    }
+    colecoes.forEach(col => {
+      const el = document.createElement('div')
+      el.className = 'colecao-item' + (col.id === ativaId ? ' active' : '')
+      let count = 0
+      for (const [, colecaoIds] of Model.assetColecoes) {
+        if (colecaoIds.has(col.id)) count++
+      }
+      el.innerHTML = `
+        <span class="colecao-dot" style="background:${col.cor}"></span>
+        <span class="colecao-item-name">${escapeHtml(col.nome)}</span>
+        <span class="colecao-count">${count}</span>
+        <button class="colecao-edit-btn" data-id="${col.id}" title="Editar coleção">✎</button>
+        <button class="colecao-delete-btn" data-id="${col.id}" title="Excluir coleção">✕</button>`
+      el.dataset.colecaoId = col.id
+      el.addEventListener('click', e => {
+        if (e.target.closest('.colecao-edit-btn') || e.target.closest('.colecao-delete-btn')) return
+        document.querySelectorAll('.colecao-item').forEach(c => c.classList.remove('active'))
+        el.classList.add('active')
+        Model.colecaoAtiva = col.id
+        this.el.filterColecao.value = col.id
+        this.el.filterColecao.dispatchEvent(new Event('change'))
+      })
+      el.querySelector('.colecao-edit-btn').addEventListener('click', e => {
+        e.stopPropagation()
+        const event = new CustomEvent('edit-colecao', { detail: col })
+        document.dispatchEvent(event)
+      })
+      el.querySelector('.colecao-delete-btn').addEventListener('click', e => {
+        e.stopPropagation()
+        const event = new CustomEvent('delete-colecao', { detail: col })
+        document.dispatchEvent(event)
+      })
+      this.el.colecaoList.appendChild(el)
+    })
+  },
+
   renderGrid(data, { onMenuClick, onCardClick }) {
     if (data.length === 0) {
       this.el.grid.className = 'empty-state'
@@ -148,6 +227,13 @@ export const View = {
     data.forEach(model => {
       const card = document.createElement('div')
       card.className = 'model-card'
+      const colecoes = Model.colecoesDeAsset(model.id)
+      let tagsHtml = ''
+      if (colecoes.length > 0) {
+        tagsHtml = '<div class="colecao-tags">' + colecoes.map(c =>
+          `<span class="colecao-tag" style="background:${c.cor}">${escapeHtml(c.nome)}</span>`
+        ).join('') + '</div>'
+      }
       card.innerHTML = `
         <div class="thumb" style="background:${model.thumbnailGrad}">
           <span class="format-tag">${model.formato}</span>
@@ -157,6 +243,7 @@ export const View = {
           <div class="name">${model.nome}</div>
           <div class="author">${model.autor}</div>
         </div>
+        ${tagsHtml}
         <button class="menu-btn" data-id="${model.id}">⋯</button>`
       card.querySelector('.menu-btn').addEventListener('click', e => {
         e.stopPropagation()
@@ -165,6 +252,60 @@ export const View = {
       card.addEventListener('click', () => onCardClick(model))
       this.el.grid.appendChild(card)
     })
+  },
+
+  openColecaoDialog(colecao) {
+    if (colecao) {
+      this.el.colecaoDialogTitle.textContent = 'Editar Coleção'
+      this.el.colecaoNome.value = colecao.nome
+      this.el.colecaoDescricao.value = colecao.descricao || ''
+      this.el.colecaoCor.value = colecao.cor || '#6C5CE7'
+      this.el.colecaoEditId.value = colecao.id
+      this.el.colecaoDialogConfirm.textContent = 'Salvar'
+    } else {
+      this.el.colecaoDialogTitle.textContent = 'Nova Coleção'
+      this.el.colecaoNome.value = ''
+      this.el.colecaoDescricao.value = ''
+      this.el.colecaoCor.value = '#6C5CE7'
+      this.el.colecaoEditId.value = ''
+      this.el.colecaoDialogConfirm.textContent = 'Criar'
+    }
+    document.querySelectorAll('.color-preset').forEach(p => {
+      p.classList.toggle('selected', p.dataset.cor === this.el.colecaoCor.value)
+    })
+    this.el.colecaoDialogOverlay.classList.add('active')
+    setTimeout(() => this.el.colecaoNome.focus(), 100)
+  },
+
+  closeColecaoDialog() {
+    this.el.colecaoDialogOverlay.classList.remove('active')
+  },
+
+  renderColecaoSubmenu(colecoes, modelId) {
+    const submenu = this.el.ctxColecaoSubmenu
+    submenu.innerHTML = ''
+    const modelColecoes = Model.assetColecoes.get(modelId)
+    if (colecoes.length === 0) {
+      submenu.innerHTML = '<div class="ctx-submenu-empty">Nenhuma coleção</div>'
+    } else {
+      colecoes.forEach(col => {
+        const item = document.createElement('div')
+        item.className = 'ctx-submenu-item'
+        const isIn = modelColecoes && modelColecoes.has(col.id)
+        item.innerHTML = `
+          <span class="ctx-submenu-dot" style="background:${col.cor}"></span>
+          <span>${isIn ? '✓ ' : ''}${escapeHtml(col.nome)}</span>`
+        item.addEventListener('click', e => {
+          e.stopPropagation()
+          const event = new CustomEvent('toggle-colecao-asset', {
+            detail: { colecaoId: col.id, assetId: modelId, add: !isIn }
+          })
+          document.dispatchEvent(event)
+        })
+        submenu.appendChild(item)
+      })
+    }
+    submenu.classList.add('active')
   },
 
   renderProgramList(programs, { onRemove }) {
@@ -267,22 +408,37 @@ export const View = {
   },
 
   _renderLoginMode() {
+    if (loginMode === 'reset' || loginMode === 'new-password') return
     const isRegister = loginMode === 'register'
     this.el.loginDialogTitle.textContent = isRegister ? 'Criar Conta' : 'Entrar'
     this.el.loginConfirm.textContent = isRegister ? 'Criar Conta' : 'Entrar'
     this.el.loginToggleMode.textContent = isRegister ? 'Já tenho conta' : 'Criar conta'
     this.el.loginUsernameField.style.display = isRegister ? '' : 'none'
+    this.el.loginEmail.parentElement.style.display = ''
+    this.el.loginPassword.parentElement.style.display = ''
+    this.el.loginForgotBtn.parentElement.style.display = ''
+    this.el.loginNewPasswordField.style.display = 'none'
+    this.el.loginNewPasswordConfirmField.style.display = 'none'
     if (!isRegister) this.el.loginUsername.value = ''
     this.el.loginError.style.display = 'none'
+    this.el.loginResetMessage.style.display = 'none'
   },
 
   toggleLoginMode() {
+    if (loginMode === 'reset' || loginMode === 'new-password') {
+      this.showLoginView()
+      return
+    }
     loginMode = loginMode === 'login' ? 'register' : 'login'
     this._renderLoginMode()
   },
 
   isRegisterMode() {
     return loginMode === 'register'
+  },
+
+  getLoginMode() {
+    return loginMode
   },
 
   showLoginError(msg) {
@@ -294,12 +450,75 @@ export const View = {
     this.el.loginError.style.display = 'none'
   },
 
+  showResetView() {
+    loginMode = 'reset'
+    this.el.loginDialogTitle.textContent = 'Recuperar Senha'
+    this.el.loginUsernameField.style.display = 'none'
+    this.el.loginEmail.parentElement.style.display = ''
+    this.el.loginPassword.parentElement.style.display = 'none'
+    this.el.loginForgotBtn.parentElement.style.display = 'none'
+    this.el.loginNewPasswordField.style.display = 'none'
+    this.el.loginNewPasswordConfirmField.style.display = 'none'
+    this.el.loginConfirm.textContent = 'Enviar link'
+    this.el.loginToggleMode.textContent = 'Voltar'
+    this.el.loginError.style.display = 'none'
+    this.el.loginResetMessage.style.display = 'none'
+  },
+
+  showNewPasswordView() {
+    loginMode = 'new-password'
+    this.el.loginDialogTitle.textContent = 'Nova Senha'
+    this.el.loginUsernameField.style.display = 'none'
+    this.el.loginEmail.parentElement.style.display = 'none'
+    this.el.loginPassword.parentElement.style.display = 'none'
+    this.el.loginForgotBtn.parentElement.style.display = 'none'
+    this.el.loginNewPasswordField.style.display = ''
+    this.el.loginNewPasswordConfirmField.style.display = ''
+    this.el.loginNewPassword.value = ''
+    this.el.loginNewPasswordConfirm.value = ''
+    this.el.loginConfirm.textContent = 'Redefinir Senha'
+    this.el.loginToggleMode.textContent = 'Voltar ao login'
+    this.el.loginError.style.display = 'none'
+    this.el.loginResetMessage.style.display = 'none'
+  },
+
+  showLoginView() {
+    loginMode = 'login'
+    this.el.loginDialogTitle.textContent = 'Entrar'
+    this.el.loginUsernameField.style.display = 'none'
+    this.el.loginEmail.parentElement.style.display = ''
+    this.el.loginPassword.parentElement.style.display = ''
+    this.el.loginForgotBtn.parentElement.style.display = ''
+    this.el.loginNewPasswordField.style.display = 'none'
+    this.el.loginNewPasswordConfirmField.style.display = 'none'
+    this.el.loginConfirm.textContent = 'Entrar'
+    this.el.loginToggleMode.textContent = 'Criar conta'
+    this.el.loginError.style.display = 'none'
+    this.el.loginResetMessage.style.display = 'none'
+    this.el.loginUsername.value = ''
+    this.el.loginEmail.value = ''
+    this.el.loginPassword.value = ''
+  },
+
+  showResetMessage(msg, isError = false) {
+    this.el.loginResetMessage.textContent = msg
+    this.el.loginResetMessage.style.display = ''
+    if (isError) {
+      this.el.loginResetMessage.className = 'login-error login-error-reset'
+    } else {
+      this.el.loginResetMessage.className = 'login-error login-success'
+    }
+  },
+
   closeLoginDialog() {
     this.el.loginDialogOverlay.classList.remove('active')
     this.el.loginEmail.value = ''
     this.el.loginPassword.value = ''
     this.el.loginUsername.value = ''
+    this.el.loginNewPassword.value = ''
+    this.el.loginNewPasswordConfirm.value = ''
     this.el.loginError.style.display = 'none'
+    this.el.loginResetMessage.style.display = 'none'
     loginMode = 'login'
   },
 
@@ -311,6 +530,76 @@ export const View = {
     } else {
       this.el.loginBtn.textContent = '👤'
       this.el.loginBtn.title = 'Login'
+    }
+  },
+
+  renderRcloneSettings(config) {
+    this.el.rcloneEnabled.checked = !!config.enabled
+    this.el.rclonePath.value = config.path || ''
+    this.el.rcloneStatus.className = 'rclone-status'
+    this.el.rcloneStatus.textContent = ''
+    if (this.el.rcloneRemote) {
+      this.el.rcloneRemote.value = config.remote || 'gdrive'
+    }
+    const fields = document.querySelectorAll('.rclone-config-fields')
+    fields.forEach(f => f.style.display = config.enabled ? '' : 'none')
+    if (!config.enabled && this.el.rcloneRemotesContainer) {
+      this.el.rcloneRemotesContainer.innerHTML = '<p class="loading-text">Ative o Rclone para ver os remotes.</p>'
+    }
+  },
+
+  renderRemotesTable(remotes, remoteSelecionado) {
+    const container = this.el.rcloneRemotesContainer;
+    if (!container) return;
+
+    if (!remotes || remotes.length === 0) {
+      container.innerHTML = `<p class="loading-text">Nenhum remote configurado no Rclone.</p>`;
+      return;
+    }
+
+    let html = `
+      <table class="ludusavi-table">
+        <thead>
+          <tr>
+            <th style="width: 40px; text-align: center;">Ativo</th>
+            <th>Nome do Remote</th>
+            <th>Tipo</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    remotes.forEach(r => {
+      const isChecked = r.nome === remoteSelecionado;
+      html += `
+        <tr class="${isChecked ? 'selected-row' : ''}" style="cursor: pointer;" onclick="window.View.selecionarLinhaRemote(this, '${r.nome}')">
+          <td style="text-align: center;">
+            <input type="radio" name="rclone_remote_choice" value="${r.nome}" class="ludusavi-radio" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); window.View.selecionarLinhaRemote(this.closest('tr'), '${r.nome}')" />
+          </td>
+          <td><strong>${r.nome}</strong></td>
+          <td><span class="ludusavi-badge">${r.tipo}</span></td>
+        </tr>
+      `;
+    });
+
+    html += `</tbody></table>`;
+    container.innerHTML = html;
+  },
+
+  selecionarLinhaRemote(linhaElemento, nomeRemote) {
+    const tabela = linhaElemento.closest('.ludusavi-table');
+    if (!tabela) return;
+
+    tabela.querySelectorAll('tr').forEach(tr => tr.classList.remove('selected-row'));
+
+    linhaElemento.classList.add('selected-row');
+
+    const radio = linhaElemento.querySelector('input[type="radio"]');
+    if (radio) radio.checked = true;
+
+    const inputOculto = document.getElementById('rcloneRemote');
+    if (inputOculto) {
+      inputOculto.value = nomeRemote;
     }
   },
 
@@ -669,3 +958,5 @@ controls.addEventListener('start', () => { controls.autoRotate = false })
 controls.addEventListener('end', () => {
   setTimeout(() => { if (isOpen) controls.autoRotate = true }, 3000)
 })
+
+window.View = View

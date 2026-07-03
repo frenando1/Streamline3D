@@ -1,7 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import cors from 'cors';
-import { execFile } from 'child_process';
+import { execFile, exec } from 'child_process';
 import { writeFileSync, readFileSync, existsSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -11,11 +11,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = join(__filename, '..');
 
 const app = express();
-const PORT = 3001;
+const PORT = 3000;
 
 app.use(cors({
   origin: true,
 }));
+app.use(express.json({ limit: '500mb' }));
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -24,8 +25,195 @@ const upload = multer({
 
 const pyScriptPath = join(__dirname, 'conversor.py');
 
+const rclonePath = `"${join(__dirname, '..', 'rclone-v1.74.3', 'rclone.exe')}"`;
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Streamline 3D server rodando ✅' });
+});
+
+function buildRemotePath(remoteName, path, fileName) {
+  remoteName = remoteName || 'gdrive';
+  const base = path ? `${remoteName}:${path.replace(/\/$/, '')}` : `${remoteName}:`;
+  return `${base}/${fileName}`;
+}
+
+// ================= ROTA: SALVAR ARQUIVO DE TEXTO NO GOOGLE DRIVE =================
+app.post('/api/drive/upload', (req, res) => {
+  const { userId, nomeUsuario, conteudoTexto } = req.body;
+
+  if (!userId) {
+    return res.status(400).json({ error: 'O ID do utilizador é obrigatório.' });
+  }
+
+  const fileName = `streamline3d_backup_${userId}.txt`;
+  const tempFilePath = join(tmpdir(), fileName);
+
+  try {
+    writeFileSync(tempFilePath, conteudoTexto, 'utf-8');
+
+    exec(`${rclonePath} copyto "${tempFilePath}" "gdrive:${fileName}"`, (error, stdout, stderr) => {
+      try { unlinkSync(tempFilePath); } catch (_) {}
+
+      if (error) {
+        console.error('❌ Erro no Rclone Upload:', stderr);
+        return res.status(500).json({ error: 'Falha ao sincronizar com o Google Drive via Rclone.', details: stderr });
+      }
+
+      console.log(`✅ Rclone: Backup atualizado com sucesso para: ${nomeUsuario} (${userId})`);
+      return res.json({ success: true, message: 'Backup atualizado com sucesso no Rclone!' });
+    });
+
+  } catch (err) {
+    try { unlinkSync(tempFilePath); } catch (_) {}
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ================= ROTA: PUXAR ARQUIVO DE TEXTO DO GOOGLE DRIVE =================
+app.get('/api/drive/download/:userId', (req, res) => {
+  const localPath = join(__dirname, '..', 'modelos.txt');
+  try {
+    if (!existsSync(localPath)) {
+      return res.json({ conteudoTexto: '' });
+    }
+    const conteudo = readFileSync(localPath, 'utf-8');
+    console.log(`📖 modelos.txt lido localmente (${conteudo.split('\n').filter(l => l.trim()).length} modelos)`);
+    return res.json({ conteudoTexto: conteudo });
+  } catch (err) {
+    console.error('Erro ao ler modelos.txt:', err);
+    return res.json({ conteudoTexto: '' });
+  }
+});
+
+// ================= ROTA: LISTAR REMOTES =================
+app.get('/api/drive/remotes', (req, res) => {
+  exec(`${rclonePath} listremotes --long`, (err, stdout, stderr) => {
+    if (err) {
+      console.error('Erro ao executar rclone listremotes:', err);
+      return res.status(500).json({ error: 'Falha ao buscar remotes', details: err.message });
+    }
+
+    const lines = stdout.split('\n').filter(line => line.trim());
+    const remotes = lines.map(line => {
+      const parts = line.split(':');
+      const nome = parts[0]?.trim() || '';
+      const tipo = parts[1]?.trim() || 'Desconhecido';
+      return { nome, tipo };
+    });
+
+    res.json({ remotes });
+  });
+});
+
+// ================= ROTA 4: TESTAR CONEXÃO RCLONE =================
+app.post('/api/drive/test', (req, res) => {
+  const { remoteName, path } = req.body;
+  const remote = remoteName || 'gdrive';
+
+  const testPath = path ? `${remote}:${path.replace(/\/$/, '')}` : `${remote}:`;
+
+  exec(`${rclonePath} lsd "${testPath}" 2>&1`, (error, stdout, stderr) => {
+    if (error) {
+      console.error('❌ Rclone test falhou:', stderr || error.message);
+      return res.json({ success: false, error: stderr || error.message });
+    }
+
+    console.log(`✅ Rclone conexão OK: ${testPath}`);
+    res.json({ success: true, message: 'Conexão com Rclone estabelecida!' });
+  });
+});
+
+// ================= ROTA: INICIALIZAR SESSÃO DO USUÁRIO =================
+app.post('/api/auth/session-init', (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'ID do usuário é obrigatório.' });
+
+    const localPath = join(__dirname, '..', 'modelos.txt');
+    const remoteUsuario = `user_${userId.replace(/[^a-zA-Z0-9]/g, '')}`;
+
+    exec(`${rclonePath} listremotes`, (err, stdout) => {
+      if (err) {
+        console.error('Erro ao verificar remotes do Rclone:', err);
+        return res.json({ success: true, remoteName: remoteUsuario, needsAuth: true, message: 'Rclone não disponível.' });
+      }
+
+      const remoteExiste = stdout.includes(remoteUsuario + ':');
+
+      if (!remoteExiste) {
+        console.log(`✨ Criando remote automático: ${remoteUsuario}`);
+        exec(`${rclonePath} config create ${remoteUsuario} drive`, (createErr) => {
+          if (createErr) console.error('Erro ao criar remote:', createErr);
+        });
+
+        if (!existsSync(localPath)) writeFileSync(localPath, '', 'utf8');
+        return res.json({ success: true, needsAuth: true, remoteName: remoteUsuario });
+      }
+
+      // Remote existe: sincronizar modelos.txt do Drive para o PC
+      console.log(`🔄 Sincronizando modelos.txt do Drive (${remoteUsuario})...`);
+      exec(`${rclonePath} copyto "${remoteUsuario}:modelos.txt" "${localPath}"`, (copyErr) => {
+        if (copyErr) {
+          console.log('ℹ️ Nenhum modelos.txt no Drive do usuário ainda.');
+          if (!existsSync(localPath)) writeFileSync(localPath, '', 'utf8');
+        } else {
+          console.log('✅ modelos.txt sincronizado do Drive!');
+        }
+        return res.json({ success: true, needsAuth: false, remoteName: remoteUsuario });
+      });
+    });
+
+  } catch (err) {
+    console.error('Erro no session-init:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ================= ROTA: ENVIAR MODELOS.TXT PARA O DRIVE DO USUÁRIO =================
+app.post('/api/drive/upload-modelos', (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'ID do usuário ausente.' });
+
+    const filename = join(__dirname, '..', 'modelos.txt');
+    if (!existsSync(filename)) {
+      return res.status(404).json({ error: 'Arquivo modelos.txt não encontrado localmente.' });
+    }
+
+    const remoteUsuario = `user_${userId.replace(/[^a-zA-Z0-9]/g, '')}`;
+
+    console.log(`📤 Sincronizando modelos.txt no Drive do usuário: ${remoteUsuario}`);
+
+    exec(`${rclonePath} copy "${filename}" ${remoteUsuario}:`, (err, stdout, stderr) => {
+      if (err) {
+        console.error('Erro no Rclone:', err);
+        return res.status(500).json({ error: 'Erro ao enviar para o Drive', details: err.message });
+      }
+      console.log(`✅ modelos.txt sincronizado para ${remoteUsuario}`);
+      return res.json({ success: true, message: 'Sincronizado com sucesso!' });
+    });
+  } catch (err) {
+    console.error('Erro no upload-modelos:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ================= ROTA: ATUALIZAR MODELOS.TXT COM O CONTEÚDO DOS MODELOS =================
+app.post('/api/modelos/atualizar-arquivo', (req, res) => {
+  try {
+    const { conteudoTexto } = req.body;
+    if (conteudoTexto === undefined || conteudoTexto === null) {
+      return res.status(400).json({ error: 'Conteúdo de texto é obrigatório.' });
+    }
+
+    const filename = join(__dirname, '..', 'modelos.txt');
+    writeFileSync(filename, conteudoTexto, 'utf8');
+    console.log(`📝 modelos.txt atualizado com ${conteudoTexto.split('\n').filter(l => l.trim()).length} modelos.`);
+    return res.json({ success: true, message: 'modelos.txt atualizado com sucesso!' });
+  } catch (err) {
+    console.error('Erro ao atualizar modelos.txt:', err);
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/api/converter', upload.single('blend'), (req, res) => {
