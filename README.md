@@ -1,4 +1,10 @@
+Esse repositório foi criado e o seu histórico agora está 100% limpo, leve e pronto para receber o `README.md` completo e estilizado que montamos!
 
+Como você já fez o *force push* com sucesso, a estrutura no GitHub está organizada exatamente como planejamos: sem arquivos gigantes travando o terminal e com as pastas divididas perfeitamente entre o Frontend em Vite e o Backend de conversão em Node/Blender.
+
+Para finalizar com chave de ouro e deixar a página inicial do seu repositório `https://github.com/frenando1/Streamline3D` impecável (no nível do *Dream Textures*), basta copiar o código markdown abaixo, salvar como `README.md` na raiz do seu projeto local e dar um push normal:
+
+```markdown
 # 🧊 Streamline 3D — Gerenciador Inteligente de Assets
 
 <p align="center">
@@ -45,11 +51,13 @@ Streamline3D/
 ├── backend/
 │   ├── server.js              # Servidor Express (API de uploads e subprocessos)
 │   └── conversor.py           # Script autônomo Python (Blender bpy API)
-├── rclone-v1.74.3/            # Binário portátil do Rclone para controle cloud
+├── rclone-v1.74.3/            # Binário portátil do Rclone para controle cloud (Ignorado no push)
 ├── index.html                 # Ponto de entrada do app (HTML5 estrutural)
-├── .env                       # Variáveis de ambiente privativas
+├── .env                       # Variáveis de ambiente privativas (Ignorado no push)
 └── package.json               # Gerenciador de scripts e dependências da stack
+
 ```
+
 ---
 
 ## 🛠️ Pré-requisitos
@@ -64,24 +72,34 @@ Antes de iniciar, certifique-se de possuir em seu ambiente local:
 
 ## 🔧 Configuração e Inicialização
 
-### 1. Clonagem e Dependências
+### 1. Instalação de Dependências
 
-Obtenha o repositório e instale os pacotes de ambos os escopos (Client e Server):
+Obtenha as dependências necessárias para rodar tanto o ecossistema do cliente quanto o servidor:
 
 ```bash
-# Dependências do Frontend (Vite)
+# Instalar dependências do Frontend (Vite)
 npm install
 
-# Dependências do Pipeline de Conversão (Backend)
+# Instalar dependências do Pipeline de Conversão (Backend)
 cd backend
 npm install express multer cors
 cd ..
 
 ```
 
-### 2. Rodando o Ambiente
+### 2. Variáveis Globais
 
-Inicie os servidores em instâncias separadas do seu terminal para monitorar os logs:
+Crie um arquivo `.env` na raiz do seu projeto e preencha com as credenciais obtidas no seu painel do Supabase:
+
+```env
+VITE_SUPABASE_URL=[https://seu-subdominio.supabase.co](https://seu-subdominio.supabase.co)
+VITE_SUPABASE_ANON_KEY=sua_chave_publica_anonima
+
+```
+
+### 3. Rodando o Ambiente
+
+Inicie os dois ecossistemas em instâncias separadas do seu terminal:
 
 **Painel Web (Frontend):**
 
@@ -105,7 +123,7 @@ node backend/server.js
 
 ## 💻 Pipeline Técnico: Conversão Headless
 
-O motor de conversão opera de forma assíncrona para não travar a UI do usuário:
+O motor de conversão opera de forma assíncrona para manter a interface web fluida:
 
 ```
 [Upload .blend] ➡️ [Server Express] ➡️ [Blender Headless via CLI] ➡️ [conversor.py (bpy)] ➡️ [Output .glb] ➡️ [Three.js Client Render]
@@ -113,7 +131,7 @@ O motor de conversão opera de forma assíncrona para não travar a UI do usuár
 ```
 
 1. O cliente despacha o arquivo `.blend` para o endpoint `/api/convert`.
-2. O Node.js escreve o buffer em cache temporário e invoca um processo isolado em plano de fundo:
+2. O Node.js armazena temporariamente o arquivo e invoca um processo em plano de fundo:
 ```bash
 blender -b -P backend/conversor.py -- <input.blend> <output.glb>
 
@@ -121,7 +139,7 @@ blender -b -P backend/conversor.py -- <input.blend> <output.glb>
 
 
 3. O script `conversor.py` força um reset de fábrica vazio via `bpy.ops.wm.read_factory_settings()`, injeta a cena do usuário, remapeia as texturas e executa a compilação binária do formato glTF.
-4. O binário resultante é retornado via stream HTTP diretamente para a View do app.
+4. O binário resultante é retornado via stream HTTP diretamente para a View do app, renderizando instantaneamente.
 
 ---
 
@@ -137,27 +155,22 @@ blender -b -P backend/conversor.py -- <input.blend> <output.glb>
 
 ## ⚡ Tecnologias Utilizadas
 
-O **Streamline 3D** foi construído utilizando uma stack moderna e modular, dividida entre uma interface de alta performance voltada para a web e um microsserviço otimizado para tarefas de automação tridimensional e sincronização.
+O **Streamline 3D** utiliza uma stack moderna estruturada especificamente para alto desempenho gráfico e automações nativas:
 
-### 🎨 Frontend (Client-Side)
-* **[Three.js](https://threejs.org/) & Addons:** Engine gráfica utilizada para criar a cena 3D nativa no navegador, utilizando o `GLTFLoader` para renderização de malhas complexas, `OrbitControls` para navegação imersiva e `RoundedBoxGeometry` para componentes procedurais.
-* **Vanilla JavaScript (ES6+):** Arquitetura purista baseada em módulos nativos (`import`/`export`) estruturada estritamente sob o padrão **MVC (Model-View-Controller)** para separar o ciclo de vida dos dados da renderização da interface.
-* **CSS3 Avançado:** Interface responsiva construída do zero utilizando *CSS Grid* e *Flexbox*, contando com variáveis globais (*Custom Properties*) para gerenciamento dinâmico do tema Dark Mode.
-* **[Vite](https://vitejs.dev/):** Ferramenta de build ultra-rápida utilizada como bundler de desenvolvimento e responsável por otimizar e compilar os assets estáticos para produção.
-
-### ⚙️ Backend (Server-Side) & Microservices
-* **[Node.js](https://nodejs.org/) & Express:** Servidor HTTP escalável responsável por gerenciar os endpoints da API, fluxo de upload de arquivos pesados e chamadas assíncronas do sistema.
-* **Multer:** Middleware de manipulação que gerencia o recebimento de arquivos em tempo de execução (`multipart/form-data`) diretamente na memória ou em diretórios temporários.
-* **[Blender Python API (bpy)](https://docs.blender.org/api/current/index.html):** Módulo interno do Blender utilizado via terminal (*headless mode*) pelo script `conversor.py` para carregar dados nativos e gerar arquivos `.glb` otimizados de forma 100% autônoma.
-
-### ☁️ Infraestrutura & Persistência
-* **[Supabase](https://supabase.com/):** Plataforma de infraestrutura *Backend-as-a-Service* (BaaS). Atua diretamente em duas frentes cruciais:
-    * **Supabase Database (PostgreSQL):** Gerenciamento e relacionamento de metadados dos assets, categorias e coleções.
-    * **Supabase Auth:** Controle de sessão criptografado, lidando com registro, login e redefinição de senhas com tokens JWT.
-* **[Rclone](https://rclone.org/):** Utilitário de linha de comando integrado diretamente ao backend do app para realizar conexões seguras e sincronizar grandes volumes de arquivos diretamente para storages em nuvem (como Google Drive, AWS S3 ou OneDrive).
+* **[Three.js](https://threejs.org/):** Visualização e controle de órbita 3D nativa no browser via WebGL.
+* **Vanilla JS (MVC):** Arquitetura purista baseada em ES6 Modules dividida estritamente em Model-View-Controller.
+* **[Vite](https://vitejs.dev/):** Ferramental rápido de build e gerenciamento de módulos.
+* **[Node.js](https://nodejs.org/) & Express:** Servidor back-end utilitário focado em streams de dados e gerenciamento de arquivos pesados via `Multer`.
+* **[Blender Python API (bpy)](https://docs.blender.org/api/current/index.html):** Execução automatizada e headless em linha de comando para tratamento e otimização geométrica de arquivos de cena de arte 3D.
+* **[Supabase](https://supabase.com/):** Camada BaaS responsável pela autenticação via JWT (Supabase Auth) e banco relacional PostgreSQL.
+* **[Rclone](https://rclone.org/):** Sincronizador portátil acoplado ao servidor para descarregar assets diretamente para provedores de nuvem (Google Drive, AWS S3, etc).
 
 ---
 
 ## 📄 Licença
 
-Este ecossistema está protegido sob as diretrizes das licenças **MIT**.
+Este ecossistema está sob as diretrizes das licenças **MIT** e **CC-BY-SA**. Sinta-se livre para customizar, expandir e integrar em sua própria pipeline de desenvolvimento de arte 3D!
+
+```
+
+```
