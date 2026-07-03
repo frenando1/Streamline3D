@@ -1,4 +1,3 @@
-
 # 🧊 Streamline 3D — Gerenciador Inteligente de Assets
 
 <p align="center">
@@ -16,6 +15,12 @@
 ---
 
 O **Streamline 3D** é um ecossistema moderno voltado para a centralização, organização e visualização fluida de assets tridimensionais (como modelos, texturas, HDRIs e materiais). O projeto unifica uma interface web baseada em **Three.js**, persistência na nuvem com **Supabase**, sincronização via **Rclone** e um microsserviço automatizado que traduz arquivos nativos do Blender (`.blend`) em formatos interativos prontos para a web (`.glb`).
+
+---
+
+## 📢 Status do Projeto
+
+> ⚠️ **Nota Importante:** Este sistema está atualmente em fase de desenvolvimento e funciona estritamente como um **protótipo / MVP (Minimum Viable Product)**. O projeto não é sério; é apenas um **wrapper (rober)** demonstrativo projetado para provar a viabilidade da integração entre a interface web, banco de dados remoto e o pipeline de automação do Blender de forma automatizada.
 
 ---
 
@@ -163,4 +168,8 @@ O **Streamline 3D** utiliza uma stack moderna estruturada especificamente para a
 
 ## 📄 Licença
 
-Este ecossistema está sob as diretrize da licença **MIT**. Sinta-se livre para customizar, expandir e integrar em sua própria pipeline de desenvolvimento de arte 3D!
+Este ecossistema está sob as diretrizes das licenças **MIT** e **CC-BY-SA**. Sinta-se livre para customizar, expandir e integrar em sua própria pipeline de desenvolvimento de arte 3D!
+
+```
+
+```
