@@ -1,4 +1,4 @@
-import { Model } from './model.js'
+import { Model, supabase } from './model.js'
 import { View, openViewer3D, closeModal, viewerModel } from './view.js'
 
 const Controller = {
@@ -42,6 +42,8 @@ const Controller = {
         if (convertItem) convertItem.classList.toggle('show', model.formato === '.blend' && (!!model.importedFile || !!model.storagePath))
         const downloadItem = View.el.ctxMenu.querySelector('.ctx-item[data-action="download"]')
         if (downloadItem) downloadItem.classList.toggle('show', !!model.importedFile || !!model.storagePath)
+        const ctxDownloadBtn = View.el.ctxMenu.querySelector('.ctx-item[data-action="download-txt"]')
+        if (ctxDownloadBtn) ctxDownloadBtn.classList.toggle('show', !!model.id)
         const addToColecaoItem = View.el.ctxMenu.querySelector('.ctx-item[data-action="add-to-colecao"]')
         if (addToColecaoItem) {
           addToColecaoItem.style.display = Model.colecoes.length > 0 ? 'flex' : 'none'
@@ -72,15 +74,6 @@ const Controller = {
       const ext = '.' + parts.pop().toLowerCase()
       const grad = Model.thumbnailGradients[Model.models.length % Model.thumbnailGradients.length]
 
-      const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.readAsDataURL(Controller.pendingFile)
-        reader.onloadend = () => resolve(reader.result)
-        reader.onerror = () => reject(reader.error)
-      })
-
-      const linhaTexto = `id=${Date.now()} "${name}" {"${base64}"} P="${ext}"`
-
       const model = {
         id: crypto.randomUUID(),
         nome: name,
@@ -93,14 +86,10 @@ const Controller = {
         animacao: false,
         thumbnailGrad: grad,
         importedFile: Controller.pendingFile,
-        conteudo_texto: linhaTexto,
+        storagePath: null,
       }
 
       Model.models.unshift(model)
-
-      if (Model.currentUser) {
-        await Model.salvarModelo(model).catch(e => View.showToast('Erro ao salvar: ' + e.message, 'error'))
-      }
 
       View.closeImportDialog()
       Controller.pendingFile = null
@@ -109,7 +98,7 @@ const Controller = {
       View.renderSidebar(Model.categories, Model.models, ativa ? ativa.dataset.categoria : 'models')
       View.renderColecoes(Model.colecoes, null)
 
-      if (Model.currentUser && Model.rcloneConfig.enabled) {
+      if (Model.currentUser) {
         Controller.salvarModelosNoDrive().catch(e => console.warn('Auto-sync falhou:', e))
       }
 
@@ -235,6 +224,26 @@ pause`
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
+  },
+
+  async descarregarModeloDoTexto(idModelo) {
+    try {
+      View.showToast('Extraindo do modelos.txt... ⏳', 'info')
+      const resposta = await fetch(`http://localhost:3000/api/modelos/baixar/${idModelo}`)
+      if (!resposta.ok) throw new Error('Erro ao baixar do modelos.txt.')
+      const blob = await resposta.blob()
+      const cd = resposta.headers.get('Content-Disposition')
+      let nome = 'asset_restaurado.blend'
+      if (cd?.includes('filename=')) nome = cd.match(/filename="(.+?)"/)?.[1] || nome
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url; link.download = nome
+      document.body.appendChild(link); link.click()
+      document.body.removeChild(link); URL.revokeObjectURL(url)
+      View.showToast('Download concluído! ✅')
+    } catch (err) {
+      View.showToast('Erro ao reconstruir o asset.', 'error')
+    }
   },
 
   renderProgramListWithHandler() {
@@ -376,13 +385,17 @@ pause`
             Model.models.length = 0
             Model.models.push(...modelosRecuperados)
             View.showToast('Biblioteca restaurada do Google Drive! 💾')
+          } else {
+            Model.models.length = 0
+            View.showToast('Nenhum modelo encontrado no Drive.', 'info')
           }
         } else {
-          await Model.carregarModelos()
+          Model.models.length = 0
+          View.showToast('Nenhum modelo no Drive.', 'info')
         }
       } catch (e) {
-        console.error('Falha no rclone, recorrendo ao Supabase:', e)
-        await Model.carregarModelos()
+        console.error('Falha ao carregar do Drive:', e)
+        View.showToast('Erro ao carregar do Drive, biblioteca vazia.', 'info')
       }
 
       Controller.applyFilters()
@@ -433,37 +446,35 @@ pause`
   },
 
   async salvarModelosNoDrive() {
+    if (!Model.currentUser) return
+    console.log('salvarModelosNoDrive: iniciando, models:', Model.models.length)
+
+    let textoCompleto
     try {
-      if (!Model.currentUser) {
-        View.showToast('Faça login primeiro!', 'error')
-        return
-      }
+      textoCompleto = await Model.exportarModelosParaTexto()
+    } catch (e) {
+      console.warn('salvarModelosNoDrive: export falhou:', e.message)
+      return
+    }
+    if (!textoCompleto) return
 
-      View.showToast('Sincronizando modelos com seu Google Drive... ⏳')
-
-      let textoCompleto
-      try {
-        textoCompleto = await Model.exportarModelosParaTexto()
-      } catch (e) {
-        if (e.message.includes('Nenhum modelo com arquivo')) {
-          textoCompleto = ''
-        } else {
-          throw e
-        }
-      }
-
+    try {
       await fetch('http://localhost:3000/api/modelos/atualizar-arquivo', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conteudoTexto: textoCompleto })
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        body: textoCompleto
       })
+
+      if (!Model.rcloneConfig.enabled) {
+        View.showToast('modelos.txt atualizado localmente ✅', 'info')
+        return
+      }
 
       const response = await fetch('http://localhost:3000/api/drive/upload-modelos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: Model.currentUser.id })
       })
-
       const data = await response.json()
       if (data.success) {
         View.showToast('Modelos sincronizados com seu Google Drive! ✅')
@@ -474,6 +485,20 @@ pause`
       console.error(err)
       View.showToast('Erro de conexão com o servidor.', 'error')
     }
+  },
+
+  async enviarModelosParaODrive() {
+    try {
+      if (!Model.currentUser) return
+      View.showToast('Sincronizando modelos.txt no Google Drive... ⏳', 'info')
+      const response = await fetch('http://localhost:3000/api/drive/upload-modelos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: Model.currentUser.id }),
+      })
+      const data = await response.json()
+      if (data.success) View.showToast('modelos.txt sincronizado na nuvem! ✅')
+    } catch (err) { console.error(err) }
   },
 
   async carregarRemotesRclone() {
@@ -640,6 +665,7 @@ document.querySelectorAll('#contextMenu .ctx-item[data-action]').forEach(item =>
     if (item.dataset.action === 'view') openViewer3D(Controller.ctxModel)
     if (item.dataset.action === 'convert') await Controller.convertBlendToGLTF(Controller.ctxModel)
     if (item.dataset.action === 'download') await Controller.downloadModelFile(Controller.ctxModel)
+    if (item.dataset.action === 'download-txt') await Controller.descarregarModeloDoTexto(Controller.ctxModel.id)
     if (item.dataset.action === 'delete') {
       if (confirm(`Excluir "${Controller.ctxModel.nome}"?`)) {
         Model.deletarModelo(Controller.ctxModel).catch(e => View.showToast('Erro ao deletar: ' + e.message, 'error'))
@@ -770,15 +796,12 @@ View.el.importTxtInput.addEventListener('change', async () => {
     }
     for (const model of imported) {
       Model.models.unshift(model)
-      if (Model.currentUser) {
-        await Model.salvarModelo(model)
-      }
     }
     Controller.applyFilters()
     const ativa = document.querySelector('.cat-item.active')
     View.renderSidebar(Model.categories, Model.models, ativa ? ativa.dataset.categoria : 'models')
     View.showToast(`${imported.length} modelo(s) importado(s)`)
-    if (Model.currentUser && Model.rcloneConfig.enabled) {
+    if (Model.currentUser) {
       Controller.salvarModelosNoDrive().catch(e => console.warn('Auto-sync modelos.txt falhou:', e))
     }
   } catch (err) {
@@ -880,6 +903,7 @@ View.el.loginConfirm.addEventListener('click', async () => {
           const initData = await initRes.json()
           if (initData.success) {
             Model.rcloneConfig.remote = initData.remoteName
+            Model.rcloneConfig.enabled = true
             Model.salvarConfig()
             if (initData.needsAuth) {
               View.showToast('VINCULANDO DRIVE: Permita o acesso na janela que se abriu no seu navegador! 🌐', 'info')
@@ -912,6 +936,7 @@ View.el.loginConfirm.addEventListener('click', async () => {
         initData = await initRes.json()
         if (initData.success) {
           Model.rcloneConfig.remote = initData.remoteName
+          Model.rcloneConfig.enabled = true
           Model.salvarConfig()
           if (initData.needsAuth) {
             View.showToast('VINCULANDO DRIVE: Permita o acesso na janela que se abriu no seu navegador! 🌐', 'info')
@@ -932,11 +957,7 @@ View.el.loginConfirm.addEventListener('click', async () => {
               Model.models.push(...modelosRecuperados)
               View.showToast('Biblioteca restaurada do Google Drive! 💾')
             }
-          } else {
-            await Model.carregarModelos()
           }
-        } else {
-          await Model.carregarModelos()
         }
         await Model.carregarColecoes()
         View.renderColecoes(Model.colecoes, Model.colecaoAtiva)
@@ -978,12 +999,13 @@ View.el.loginNewPasswordConfirm.addEventListener('keydown', e => {
 View.el.accountSaveBtn.addEventListener('click', async () => {
   const name = View.el.accountNameInput.value.trim()
   const email = View.el.accountEmailInput.value.trim()
+  const password = View.el.accountPasswordInput.value.trim()
   if (!name || !email) {
     View.showToast('Preencha nome e e-mail', 'error')
     return
   }
   try {
-    await Model.updateUser({ name, email })
+    await Model.updateUser({ name, email, ...(password ? { password } : {}) })
     View.renderAccountSettings(Model.currentUser)
     View.updateLoginUI(Model.currentUser)
     View.showToast('Conta atualizada')
@@ -994,23 +1016,19 @@ View.el.accountSaveBtn.addEventListener('click', async () => {
 
 View.el.accountLogoutBtn.addEventListener('click', async () => {
   try {
+    console.log('[logout] Botão Sair clicado')
     await Model.logoutUser()
+    console.log('[logout] logoutUser concluído, limpando UI...')
     Model.models.length = 0
     Model.colecoes = []
     Model.assetColecoes = new Map()
     Model.colecaoAtiva = null
-    View.el.filterColecao.value = 'todas'
-    View.renderColecoes([], null)
-    View.populateColecaoFilter([])
-    Controller.applyFilters()
-    const ativa = document.querySelector('.cat-item.active')
-    View.renderSidebar(Model.categories, Model.models, ativa ? ativa.dataset.categoria : 'models')
-    View.renderAccountSettings(null)
     View.el.settingsOverlay.classList.remove('active')
-    View.updateLoginUI(null)
     View.showToast('Desconectado')
+    setTimeout(() => location.reload(), 500)
   } catch (err) {
-    View.showToast('Erro ao desconectar', 'error')
+    console.error('Erro no logout:', err)
+    View.showToast('Erro ao desconectar: ' + err.message, 'error')
   }
 })
 
@@ -1047,6 +1065,78 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && View.el.settingsOverlay.classList.contains('active')) View.el.settingsOverlay.classList.remove('active')
   if (e.key === 'Escape' && View.el.loginDialogOverlay.classList.contains('active')) View.closeLoginDialog()
   if (e.key === 'Escape' && View.el.colecaoDialogOverlay.classList.contains('active')) View.closeColecaoDialog()
+})
+
+// ================= SUPABASE: LISTENER DE AUTENTICAÇÃO =================
+supabase.auth.onAuthStateChange(async (event, session) => {
+  if (session) {
+    View.closeLoginOverlay()
+    console.log('Usuário autenticado:', session.user.email)
+
+    // Seta usuário IMEDIATAMENTE, antes de qualquer query
+    Model.currentUser = { id: session.user.id, email: session.user.email, name: session.user.email }
+    Model._saveSession(Model.currentUser)
+    View.updateLoginUI(Model.currentUser)
+
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('name')
+        .eq('id', session.user.id)
+        .single()
+      if (profile?.name) {
+        Model.currentUser.name = profile.name
+        Model._saveSession(Model.currentUser)
+        View.updateLoginUI(Model.currentUser)
+      }
+    } catch (e) {
+      console.warn('Perfil não encontrado, tentando criar:', e.message)
+      try {
+        await supabase.from('profiles').insert({
+          id: session.user.id,
+          name: session.user.email.split('@')[0],
+          email: session.user.email,
+        })
+        Model.currentUser.name = session.user.email.split('@')[0]
+        Model._saveSession(Model.currentUser)
+        View.updateLoginUI(Model.currentUser)
+        console.log('Perfil criado com sucesso!')
+      } catch (e2) {
+        console.warn('Não foi possível criar perfil:', e2.message)
+      }
+    }
+
+    try {
+      const response = await fetch('http://localhost:3000/api/auth/session-init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: session.user.id }),
+      })
+      const sessionData = await response.json()
+      if (sessionData.success) {
+        Model.rcloneConfig.remote = sessionData.remoteName
+        Model.rcloneConfig.enabled = true
+        Model.salvarConfig()
+        if (sessionData.needsAuth) {
+          View.showToast('VINCULANDO DRIVE: Permita o acesso na janela aberta! 🌐', 'info')
+        } else {
+          View.showToast('Google Drive conectado! ✅')
+        }
+      }
+    } catch (err) { console.error('Erro ao conectar com Rclone:', err) }
+  } else {
+    try {
+      Model.currentUser = null
+      Model._clearSession()
+      View.updateLoginUI(null)
+      Model.models.length = 0
+      Model.colecoes = []
+      View.el.settingsOverlay.classList.remove('active')
+      View.renderSidebar(Model.categories, Model.models, 'models')
+      View.renderColecoes([], null)
+      Controller.applyFilters()
+    } catch (e) { console.warn('Erro no cleanup do logout:', e) }
+  }
 })
 
 Controller.init()

@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 export const Model = {
   categories: [
@@ -107,7 +107,7 @@ export const Model = {
     if (data.user) {
       const { error: profileError } = await supabase
         .from('profiles')
-        .insert({ id: data.user.id, name: usuario })
+        .insert({ id: data.user.id, name: usuario, email })
       if (profileError) console.warn('Erro ao criar perfil:', profileError.message)
     }
 
@@ -121,9 +121,25 @@ export const Model = {
   },
 
   async logoutUser() {
-    await supabase.auth.signOut()
+    console.log('[logout] Chamando signOut...')
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
+    try {
+      await Promise.race([supabase.auth.signOut(), timeout])
+      console.log('[logout] signOut concluído')
+    } catch (err) {
+      console.warn('[logout] signOut falhou ou timeoute, forçando logout local:', err.message)
+      Object.keys(localStorage).forEach(k => { if (k.startsWith('sb-')) localStorage.removeItem(k) })
+    }
     this.currentUser = null
     this._clearSession()
+  },
+
+  async signInWithProvider(provider) {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: 'http://localhost:5173' },
+    })
+    if (error) throw new Error(error.message)
   },
 
   async updateUser(data) {
@@ -137,6 +153,16 @@ export const Model = {
       if (error) throw new Error(error.message)
       this.currentUser.name = data.name
     }
+
+    const authUpdates = {}
+    if (data.email) authUpdates.email = data.email
+    if (data.password) authUpdates.password = data.password
+    if (Object.keys(authUpdates).length) {
+      const { error } = await supabase.auth.updateUser(authUpdates)
+      if (error) throw new Error(error.message)
+      if (data.email) this.currentUser.email = data.email
+    }
+
     this._saveSession(this.currentUser)
     return true
   },
@@ -194,12 +220,14 @@ export const Model = {
 
   guessCategory(ext) {
     const map = {
-      blend: 'models', max: 'models', fbx: 'models', gltf: 'models', glb: 'models',
-      obj: 'models', '3ds': 'models', dae: 'models', stl: 'models', ply: 'models',
       hdr: 'hdri', exr: 'hdri',
-      png: 'textures', jpg: 'textures', jpeg: 'textures', tga: 'textures', psd: 'textures',
+      png: 'textures', jpg: 'textures', jpeg: 'textures', tga: 'textures', tiff: 'textures',
+      blend: 'models', fbx: 'models', obj: 'models', gltf: 'models', glb: 'models', max: 'models',
+      blendmat: 'materials', mtlexp: 'materials',
+      brush: 'brushes', abr: 'brushes',
+      py: 'plugins', zip: 'plugins',
     }
-    return map[ext] || 'models'
+    return map[ext.replace('.', '').toLowerCase()] || 'models'
   },
 
   async carregarModelos() {
@@ -306,14 +334,17 @@ export const Model = {
   async obterArquivoModelo(model) {
     if (model.importedFile) return model.importedFile
     if (!model.storagePath) return null
-    const { data, error } = await supabase.storage
-      .from('modelos')
-      .download(model.storagePath)
-    if (error || !data) return null
-    const name = model.storagePath.split('/').pop()
-    const ext = model.formato.startsWith('.') ? model.formato : '.' + model.formato
-    model.importedFile = new File([data], name || model.nome + ext)
-    return model.importedFile
+    try {
+      const res = await fetch(model.storagePath)
+      if (!res.ok) return null
+      const blob = await res.blob()
+      const ext = model.formato.startsWith('.') ? model.formato : '.' + model.formato
+      model.importedFile = new File([blob], model.nome + ext)
+      return model.importedFile
+    } catch (e) {
+      console.warn('Download falhou:', e)
+      return null
+    }
   },
 
   _saveSession(user) {
@@ -493,64 +524,35 @@ export const Model = {
     return this.colecoes.filter(c => ids.has(c.id))
   },
 
-  _arquivoParaBase64(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.readAsDataURL(file)
-      reader.onload = () => resolve(reader.result)
-      reader.onerror = error => reject(error)
-    })
-  },
-
-  _base64ParaBlob(base64Data) {
-    const partes = base64Data.split(',')
-    const byteString = atob(partes[1])
-    const mimeString = partes[0].split(':')[1].split(';')[0]
-    const ab = new ArrayBuffer(byteString.length)
-    const ia = new Uint8Array(ab)
-    for (let i = 0; i < byteString.length; i++) {
-      ia[i] = byteString.charCodeAt(i)
+  async _uploadModelo(model) {
+    if (!model.importedFile) return
+    const ext = model.formato.startsWith('.') ? model.formato : '.' + model.formato
+    const formData = new FormData()
+    formData.append('file', model.importedFile)
+    formData.append('id', model.id)
+    formData.append('extensao', ext)
+    try {
+      const res = await fetch('http://localhost:3000/api/modelos/upload', { method: 'POST', body: formData })
+      const data = await res.json()
+      if (data.success) {
+        model.storagePath = `http://localhost:3000/api/modelos/download/${model.id}?ext=${ext}`
+      }
+    } catch (e) {
+      console.warn('Upload falhou:', e)
     }
-    return new Blob([ab], { type: mimeString })
   },
 
   async exportarModelosParaTexto() {
     let conteudo = ''
     for (const model of this.models) {
-      if (!model.importedFile && !model.storagePath) continue
-      let file = model.importedFile
-      if (!file && model.storagePath) {
-        file = await this.obterArquivoModelo(model)
+      if (model.importedFile && !model.storagePath) {
+        await this._uploadModelo(model)
       }
-      if (!file) continue
-      try {
-        const base64 = await this._arquivoParaBase64(file)
-        const ext = model.formato.startsWith('.') ? model.formato : '.' + model.formato
-        conteudo += `id=${model.id} "${model.nome}" {"${base64}"} P="${ext}"\n`
-      } catch (err) {
-        console.error('Erro ao processar', model.nome, err)
-      }
-    }
-    if (!conteudo) {
-      throw new Error('Nenhum modelo com arquivo para exportar')
+      if (!model.storagePath) continue
+      const ext = model.formato.startsWith('.') ? model.formato : '.' + model.formato
+      conteudo += `id=${model.id} "${model.nome}" P="${ext}"\n`
     }
     return conteudo
-  },
-
-  baixarModeloApartirDoTexto(linhaTexto) {
-    const nomeMatch = linhaTexto.match(/"([^"]+)"/)
-    const nomeModelo = nomeMatch ? nomeMatch[1] : 'modelo_extraido'
-    const extMatch = linhaTexto.match(/P="([^"]+)"/)
-    const extensao = extMatch ? extMatch[1] : '.blend'
-    const codigoMatch = linhaTexto.match(/\{"([^"]+)"\}/)
-    if (!codigoMatch) throw new Error('Código Base64 não encontrado')
-    const blob = this._base64ParaBlob(codigoMatch[1])
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = nomeModelo + extensao
-    link.click()
-    URL.revokeObjectURL(url)
   },
 
   importarModelosDoTexto(conteudo) {
@@ -561,15 +563,11 @@ export const Model = {
         const nomeMatch = linha.match(/"([^"]+)"/)
         const idMatch = linha.match(/id=([^\s"]+)/)
         const extMatch = linha.match(/P="([^"]+)"/)
-        const codigoMatch = linha.match(/\{"([^"]+)"\}/)
-        if (!codigoMatch || !nomeMatch) continue
+        if (!nomeMatch) continue
 
         const nome = nomeMatch[1]
         const ext = extMatch ? extMatch[1] : '.blend'
         const id = idMatch ? idMatch[1] : crypto.randomUUID()
-
-        const blob = this._base64ParaBlob(codigoMatch[1])
-        const file = new File([blob], nome + ext)
 
         const grad = this.thumbnailGradients[(this.models.length + imported.length) % this.thumbnailGradients.length]
         const cat = this.guessCategory(ext.replace('.', ''))
@@ -584,7 +582,8 @@ export const Model = {
           disponivelDownload: true,
           animacao: false,
           thumbnailGrad: grad,
-          importedFile: file,
+          importedFile: null,
+          storagePath: `http://localhost:3000/api/modelos/download/${id}?ext=${ext}`,
         })
       } catch (err) {
         console.warn('Linha ignorada:', err)

@@ -117,6 +117,11 @@ export const View = {
     rcloneSaveBtn: document.getElementById('rcloneSaveBtn'),
     rcloneRefreshBtn: document.getElementById('rcloneRefreshBtn'),
     rcloneRemotesContainer: document.getElementById('rcloneRemotesContainer'),
+    ctxDownloadBtn: document.getElementById('ctxDownloadBtn'),
+    loginOverlay: document.getElementById('loginOverlay'),
+    loginMessage: document.getElementById('loginMessage'),
+    loginGoogleBtn: document.getElementById('loginGoogleBtn'),
+    loginGithubBtn: document.getElementById('loginGithubBtn'),
   },
 
   showToast(msg, tipo = 'success') {
@@ -531,6 +536,15 @@ export const View = {
       this.el.loginBtn.textContent = '👤'
       this.el.loginBtn.title = 'Login'
     }
+  },
+
+  openLoginOverlay() {
+    if (this.el.loginMessage) this.el.loginMessage.textContent = ''
+    this.el.loginOverlay.classList.add('active')
+  },
+
+  closeLoginOverlay() {
+    this.el.loginOverlay.classList.remove('active')
   },
 
   renderRcloneSettings(config) {

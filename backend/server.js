@@ -2,10 +2,11 @@ import express from 'express';
 import multer from 'multer';
 import cors from 'cors';
 import { execFile, exec } from 'child_process';
-import { writeFileSync, readFileSync, existsSync, unlinkSync } from 'fs';
+import { writeFileSync, readFileSync, existsSync, unlinkSync, createWriteStream, createReadStream, mkdirSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
+import readline from 'readline';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = join(__filename, '..');
@@ -25,7 +26,10 @@ const upload = multer({
 
 const pyScriptPath = join(__dirname, 'conversor.py');
 
-const rclonePath = `"${join(__dirname, '..', 'rclone-v1.74.3', 'rclone.exe')}"`;
+const isWin = process.platform === 'win32'
+const rclonePath = isWin
+  ? `"${join(__dirname, '..', 'rclone-v1.74.3', 'rclone.exe')}"`
+  : `"${join(__dirname, '..', 'rclone-v1.74.3', 'rclone-v1.74.3-linux-amd64', 'rclone')}"`;
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Streamline 3D server rodando ✅' });
@@ -150,16 +154,18 @@ app.post('/api/auth/session-init', (req, res) => {
         return res.json({ success: true, needsAuth: true, remoteName: remoteUsuario });
       }
 
-      // Remote existe: sincronizar modelos.txt do Drive para o PC
+      // Remote existe: sincronizar modelos.txt + uploads do Drive para o PC
       console.log(`🔄 Sincronizando modelos.txt do Drive (${remoteUsuario})...`);
-      exec(`${rclonePath} copyto "${remoteUsuario}:modelos.txt" "${localPath}"`, (copyErr) => {
+      exec(`${rclonePath} copy "${remoteUsuario}:modelos.txt" "${localPath}"`, (copyErr) => {
         if (copyErr) {
           console.log('ℹ️ Nenhum modelos.txt no Drive do usuário ainda.');
           if (!existsSync(localPath)) writeFileSync(localPath, '', 'utf8');
         } else {
           console.log('✅ modelos.txt sincronizado do Drive!');
         }
-        return res.json({ success: true, needsAuth: false, remoteName: remoteUsuario });
+        exec(`${rclonePath} copy "${remoteUsuario}:uploads" "${uploadsDir}"`, () => {
+          return res.json({ success: true, needsAuth: false, remoteName: remoteUsuario });
+        });
       });
     });
 
@@ -169,28 +175,32 @@ app.post('/api/auth/session-init', (req, res) => {
   }
 });
 
-// ================= ROTA: ENVIAR MODELOS.TXT PARA O DRIVE DO USUÁRIO =================
+// ================= ROTA: ENVIAR MODELOS.TXT + UPLOADS PARA O DRIVE DO USUÁRIO =================
 app.post('/api/drive/upload-modelos', (req, res) => {
   try {
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: 'ID do usuário ausente.' });
 
     const filename = join(__dirname, '..', 'modelos.txt');
-    if (!existsSync(filename)) {
-      return res.status(404).json({ error: 'Arquivo modelos.txt não encontrado localmente.' });
-    }
-
     const remoteUsuario = `user_${userId.replace(/[^a-zA-Z0-9]/g, '')}`;
 
-    console.log(`📤 Sincronizando modelos.txt no Drive do usuário: ${remoteUsuario}`);
+    console.log(`📤 Sincronizando modelos.txt + uploads/ no Drive do usuário: ${remoteUsuario}`);
 
     exec(`${rclonePath} copy "${filename}" ${remoteUsuario}:`, (err, stdout, stderr) => {
       if (err) {
-        console.error('Erro no Rclone:', err);
+        console.error('Erro no Rclone modelos.txt:', err);
         return res.status(500).json({ error: 'Erro ao enviar para o Drive', details: err.message });
       }
-      console.log(`✅ modelos.txt sincronizado para ${remoteUsuario}`);
-      return res.json({ success: true, message: 'Sincronizado com sucesso!' });
+
+      exec(`${rclonePath} copy "${uploadsDir}" ${remoteUsuario}:uploads`, (err2) => {
+        if (err2) {
+          console.error('Erro no Rclone uploads/:', err2);
+          return res.json({ success: true, warning: 'modelos.txt sincronizado, uploads/ falhou.' });
+        }
+
+        console.log(`✅ modelos.txt + uploads/ sincronizados para ${remoteUsuario}`);
+        return res.json({ success: true, message: 'Sincronizado com sucesso!' });
+      });
     });
   } catch (err) {
     console.error('Erro no upload-modelos:', err);
@@ -199,19 +209,63 @@ app.post('/api/drive/upload-modelos', (req, res) => {
 });
 
 // ================= ROTA: ATUALIZAR MODELOS.TXT COM O CONTEÚDO DOS MODELOS =================
-app.post('/api/modelos/atualizar-arquivo', (req, res) => {
+app.post('/api/modelos/atualizar-arquivo', express.text({ limit: '500mb', type: 'text/plain' }), (req, res) => {
   try {
-    const { conteudoTexto } = req.body;
-    if (conteudoTexto === undefined || conteudoTexto === null) {
-      return res.status(400).json({ error: 'Conteúdo de texto é obrigatório.' });
+    const conteudoTexto = req.body || '';
+    if (conteudoTexto === '') {
+      // Allow empty content (clearing the file)
     }
 
     const filename = join(__dirname, '..', 'modelos.txt');
     writeFileSync(filename, conteudoTexto, 'utf8');
-    console.log(`📝 modelos.txt atualizado com ${conteudoTexto.split('\n').filter(l => l.trim()).length} modelos.`);
+    console.log(`📝 modelos.txt atualizado (${conteudoTexto ? conteudoTexto.split('\n').filter(l => l.trim()).length : 0} modelos).`);
     return res.json({ success: true, message: 'modelos.txt atualizado com sucesso!' });
   } catch (err) {
     console.error('Erro ao atualizar modelos.txt:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ================= ROTA: UPLOAD DE ARQUIVO BINÁRIO =================
+const uploadsDir = join(__dirname, 'uploads');
+try { mkdirSync(uploadsDir, { recursive: true }); } catch (_) {}
+
+app.post('/api/modelos/upload', upload.single('file'), (req, res) => {
+  try {
+    const { id, extensao } = req.body;
+    if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
+    if (!id) return res.status(400).json({ error: 'ID do asset é obrigatório.' });
+
+    const ext = extensao ? (extensao.startsWith('.') ? extensao : '.' + extensao) : '.bin';
+    const filePath = join(uploadsDir, `${id}${ext}`);
+
+    writeFileSync(filePath, req.file.buffer);
+    console.log(`📦 Asset salvo: ${filePath}`);
+    return res.json({ success: true, filePath });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ================= ROTA: DOWNLOAD DE ARQUIVO BINÁRIO =================
+app.get('/api/modelos/download/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const ext = req.query.ext || '.bin';
+    const filePath = join(uploadsDir, `${id}${ext}`);
+
+    if (!existsSync(filePath)) {
+      return res.status(404).json({ error: 'Arquivo não encontrado.' });
+    }
+
+    const buffer = readFileSync(filePath);
+    res.set({
+      'Content-Type': 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${id}${ext}"`,
+      'Content-Length': buffer.length,
+    });
+    res.send(buffer);
+  } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 });

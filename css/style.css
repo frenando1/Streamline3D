@@ -1770,6 +1770,93 @@ body {
 
 #colecaoDialog .dialog-actions #colecaoDialogConfirm:hover { background: #7F6FF0; transform: scale(1.03); }
 
+/* ===== Login Overlay ===== */
+#loginOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 350;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+#loginOverlay.active {
+  display: flex;
+}
+#loginOverlay .login-panel {
+  background: #1a1a20;
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  width: min(92vw, 360px);
+  padding: 32px 28px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+#loginOverlay .login-panel h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 20px;
+}
+#loginOverlay .login-msg {
+  font-size: 13px;
+  color: var(--text-sec);
+  margin-bottom: 20px;
+  min-height: 20px;
+}
+#loginOverlay #authButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#loginOverlay .login-btn {
+  width: 100%;
+  padding: 11px 16px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background var(--transition), transform var(--transition);
+  color: #fff;
+}
+#loginOverlay .login-btn.google {
+  background: #4285F4;
+}
+#loginOverlay .login-btn.google:hover {
+  background: #5a95f5;
+  transform: scale(1.02);
+}
+#loginOverlay .login-btn.github {
+  background: #24292e;
+}
+#loginOverlay .login-btn.github:hover {
+  background: #2c3136;
+  transform: scale(1.02);
+}
+#loginOverlay .login-alt {
+  margin-top: 16px;
+  text-align: center;
+}
+#loginOverlay .login-alt .btn-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: background var(--transition);
+}
+#loginOverlay .login-alt .btn-link:hover {
+  background: rgba(108, 92, 231, 0.1);
+}
+
 #toast {
   position: fixed;
   bottom: 80px;
