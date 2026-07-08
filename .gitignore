@@ -2,7 +2,6 @@
 .env
 node_modules/
 dist/
-# Ignorar binários do Rclone e caches/logs pesados
 rclone-v1.74.3/
 modelos.txt
 *.exe
