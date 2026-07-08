@@ -89,6 +89,9 @@ const Controller = {
         storagePath: null,
       }
 
+      if (Model.currentUser) {
+        await Model.salvarModelo(model)
+      }
       Model.models.unshift(model)
 
       View.closeImportDialog()
@@ -781,7 +784,7 @@ View.el.exportTxtBtn.addEventListener('click', async () => {
 View.el.exportCompletoBtn.addEventListener('click', async () => {
   try {
     View.showToast('Exportando modelos com Base64... ⏳', 'info')
-    const texto = await Model.exportarModelosParaTexto()
+    const texto = await Model.exportarModelosCompletosParaTexto()
     const blob = new Blob([texto], { type: 'text/plain;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')

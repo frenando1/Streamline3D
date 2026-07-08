@@ -244,16 +244,18 @@ export const Model = {
 
     this.models.length = 0
     for (const row of data) {
+      let meta = {}
+      try { meta = JSON.parse(row.conteudo_texto || '{}') } catch (e) {}
       this.models.push({
         id: row.id,
         nome: row.nome,
-        autor: row.autor,
-        categoria: row.categoria,
-        licenca: row.licenca,
-        formato: row.formato,
-        disponivelDownload: row.disponivel_download,
-        animacao: row.animacao,
-        thumbnailGrad: row.thumbnail_grad,
+        autor: meta.autor || '',
+        categoria: meta.categoria || 'models',
+        licenca: meta.licenca || 'cc0',
+        formato: meta.formato || '',
+        disponivelDownload: meta.disponivelDownload ?? true,
+        animacao: meta.animacao ?? false,
+        thumbnailGrad: meta.thumbnailGrad || this.thumbnailGradients[0],
         storagePath: row.storage_path,
         importedFile: null,
       })
@@ -268,19 +270,27 @@ export const Model = {
       const { error: upErr } = await supabase.storage
         .from('modelos')
         .upload(storagePath, model.importedFile, { upsert: true })
-      if (upErr) console.warn('Erro ao enviar arquivo:', upErr.message)
+      if (upErr) {
+        if (upErr.message?.includes('Bucket not found')) {
+          console.warn('Bucket "modelos" não encontrado no Supabase. Crie-o no painel Storage.')
+        } else {
+          console.warn('Erro ao enviar arquivo:', upErr.message)
+        }
+      }
     }
     const { error } = await supabase.from('assets').insert({
       id: model.id,
       user_id: this.currentUser.id,
       nome: model.nome,
-      autor: model.autor,
-      categoria: model.categoria,
-      licenca: model.licenca,
-      formato: model.formato,
-      disponivel_download: model.disponivelDownload,
-      animacao: model.animacao,
-      thumbnail_grad: model.thumbnailGrad,
+      conteudo_texto: JSON.stringify({
+        autor: model.autor,
+        categoria: model.categoria,
+        licenca: model.licenca,
+        formato: model.formato,
+        disponivelDownload: model.disponivelDownload,
+        animacao: model.animacao,
+        thumbnailGrad: model.thumbnailGrad,
+      }),
       storage_path: storagePath,
     })
     if (error) throw error
@@ -295,16 +305,27 @@ export const Model = {
       const { error: upErr } = await supabase.storage
         .from('modelos')
         .upload(storagePath, model.importedFile, { upsert: true })
-      if (upErr) console.warn('Erro ao enviar arquivo:', upErr.message)
+      if (upErr) {
+        if (upErr.message?.includes('Bucket not found')) {
+          console.warn('Bucket "modelos" não encontrado no Supabase. Crie-o no painel Storage.')
+        } else {
+          console.warn('Erro ao enviar arquivo:', upErr.message)
+        }
+      }
     }
     const { error } = await supabase
       .from('assets')
       .update({
         nome: model.nome,
-        formato: model.formato,
-        disponivel_download: model.disponivelDownload,
-        animacao: model.animacao,
-        thumbnail_grad: model.thumbnailGrad,
+        conteudo_texto: JSON.stringify({
+          autor: model.autor,
+          categoria: model.categoria,
+          licenca: model.licenca,
+          formato: model.formato,
+          disponivelDownload: model.disponivelDownload,
+          animacao: model.animacao,
+          thumbnailGrad: model.thumbnailGrad,
+        }),
         storage_path: storagePath,
       })
       .eq('id', model.id)
@@ -488,6 +509,17 @@ export const Model = {
 
   async adicionarAssetNaColecao(colecaoId, assetId) {
     if (this.currentUser) {
+      const model = this.models.find(m => m.id === assetId)
+      if (model) {
+        const { data: existente } = await supabase
+          .from('assets')
+          .select('id')
+          .eq('id', assetId)
+          .maybeSingle()
+        if (!existente) {
+          await this.salvarModelo(model)
+        }
+      }
       const { error } = await supabase.from('colecao_assets').insert({
         colecao_id: colecaoId,
         asset_id: assetId,
@@ -558,6 +590,15 @@ export const Model = {
     let conteudo = ''
     for (const model of this.models) {
       const ext = model.formato.startsWith('.') ? model.formato : '.' + model.formato
+      conteudo += `"${model.nome}" id=${model.id} P="${ext}"\n`
+    }
+    return conteudo
+  },
+
+  async exportarModelosCompletosParaTexto() {
+    let conteudo = ''
+    for (const model of this.models) {
+      const ext = model.formato.startsWith('.') ? model.formato : '.' + model.formato
 
       let file = model.importedFile
       if (!file && model.storagePath) {
@@ -567,7 +608,14 @@ export const Model = {
         file = new File([blob], model.nome + ext)
         model.importedFile = file
       }
-      if (!file) throw new Error(`"${model.nome}" sem arquivo`)
+      if (!file) {
+        conteudo += `"${model.nome}" id=${model.id} P="${ext}" # sem arquivo\n`
+        continue
+      }
+      if (file.size > 50 * 1024 * 1024) {
+        conteudo += `"${model.nome}" id=${model.id} P="${ext}" # arquivo grande demais\n`
+        continue
+      }
 
       const b64 = await this._fileToBase64(file)
       if (!b64) throw new Error(`Base64 falhou para "${model.nome}"`)
