@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Streamline 3D — Gerenciador de Assets</title>
+  <link rel="icon" type="image/png" href="/assets/Gemini_Generated_Image_7z15la7z15la7z15-removebg-preview%20-%20Copia-CN6A5tBV.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script type="module" crossorigin src="/assets/index-CZj47e5g.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-CIJphRh0.css">
+</head>
+<body>
+
+  <div id="app">
+    <aside id="sidebar">
+      <div class="logo">
+        <img src="/assets/Gemini_Generated_Image_7z15la7z15la7z15-removebg-preview-Dm_htrQJ.png" alt="Streamline 3D Logo">
+      </div>
+      <div id="categoryList"></div>
+      <div class="sidebar-divider"></div>
+      <div class="sidebar-section">
+        <div class="sidebar-section-header">
+          <span>Coleções</span>
+          <button id="addColecaoBtn" class="sidebar-add-btn" title="Nova coleção">+</button>
+        </div>
+        <div id="colecaoList"></div>
+      </div>
+    </aside>
+
+    <div id="main">
+      <header id="header">
+        <div class="filter-group">
+          <select id="filterCategoria">
+            <option value="todas">Todas as categorias</option>
+          </select>
+          <select id="filterLicenca">
+            <option value="todas">Todas as licen&ccedil;as</option>
+            <option value="cc0">CC0 (Dom&iacute;nio P&uacute;blico)</option>
+            <option value="cc-by">CC BY (Atribui&ccedil;&atilde;o)</option>
+            <option value="cc-by-sa">CC BY-SA (CompartilhaIgual)</option>
+            <option value="cc-by-nc">CC BY-NC (N&atilde;oComercial)</option>
+            <option value="royalty-free">Royalty Free</option>
+          </select>
+          <select id="filterOutros">
+            <option value="todos">Outros filtros</option>
+            <option value="download">Dispon&iacute;vel p/ download</option>
+            <option value="animacao">Anima&ccedil;&atilde;o</option>
+          </select>
+          <select id="filterFormato">
+            <option value="todos">Todos os formatos</option>
+            <option value=".blend">.blend</option>
+            <option value=".max">.max</option>
+            <option value=".fbx">.fbx</option>
+            <option value=".gltf">.gltf/.glb</option>
+            <option value=".obj">.obj</option>
+          </select>
+          <select id="filterColecao">
+            <option value="todas">Todas as coleções</option>
+          </select>
+        </div>
+        <div class="toolbar">
+          <button id="Login" title="Login">👤</button>  
+          <button id="settingsBtn" title="Configurações">⚙</button>
+          <button id="themeToggle" title="Alternar tema">🌙</button>
+        </div>
+      </header>
+
+      <div id="gridWrapper">
+        <div id="grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <button id="importFab">
+    <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Import Asset
+  </button>
+
+  <input type="file" id="fileInput" hidden accept=".blend,.obj,.fbx,.gltf,.glb,.max,.3ds,.stl,.dae,.ply,.stp" />
+
+  <div id="contextOverlay"></div>
+  <div id="contextMenu">
+    <div class="ctx-item" data-action="view">
+      <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      <span>Visualizar</span>
+    </div>
+    <div class="ctx-item ctx-convert" data-action="convert">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <span>Converter para glTF</span>
+    </div>
+      <div class="ctx-item" data-action="download">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>Download</span>
+      </div>
+      <div class="ctx-item" data-action="download-txt" id="ctxDownloadBtn" style="display:none">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        <span>Baixar de modelos.txt</span>
+      </div>
+      <div class="ctx-item ctx-collection-action" data-action="add-to-colecao">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>Adicionar à coleção</span>
+      </div>
+      <div id="ctxColecaoSubmenu" class="ctx-submenu"></div>
+      <div class="ctx-divider"></div>
+    <div class="ctx-item danger" data-action="delete">
+      <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      <span>Excluir</span>
+    </div>
+  </div>
+
+  <div id="modalOverlay">
+    <div id="modal">
+      <div id="viewport">
+        <button id="closeBtn">✕</button>
+
+        <div id="toolbarModal">
+          <button id="toolDownload" title="Download">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </button>
+          <button id="toolOpenIn" title="Abrir em programa externo">
+            <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          </button>
+          <div id="toolOpenInDropdown" class="toolbar-dropdown">
+            <div class="dropdown-label">Abrir em</div>
+            <div id="toolOpenInList"></div>
+          </div>
+        </div>
+
+        <div id="assetInfo">
+          <h2 id="modalAssetName">Modelo 3D</h2>
+          <span id="modalAuthor"></span>
+        </div>
+
+        <div id="loadingOverlay">
+          <div class="spinner"></div>
+          <span class="loading-text">Carregando asset 3D…</span>
+        </div>
+
+        <div id="viewerMessage">
+          <span class="msg-icon">📦</span>
+          <span class="msg-text"></span>
+          <div class="viewer-msg-actions">
+            <button class="convert-btn" id="viewerConvertBtn">Converter para glTF</button>
+            <button class="convert-btn secondary" id="viewerConfigBtn">⚙ Configurar Blender</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="loginOverlay">
+    <div class="login-panel">
+      <h2>🔐 Autenticação</h2>
+      <div id="loginMessage" class="login-msg"></div>
+      <div id="authButtons">
+        <button id="loginGoogleBtn" class="login-btn google">Entrar com Google</button>
+        <button id="loginGithubBtn" class="login-btn github">Entrar com GitHub</button>
+      </div>
+      <div class="login-alt">
+        <button id="loginEmailLink" class="btn-link">Entrar com email/senha</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="importDialogOverlay">
+    <div id="importDialog">
+      <div class="dialog-header">
+        <h3>Importar Asset</h3>
+      </div>
+      <div class="dialog-body">
+        <div class="file-info">
+          <span class="file-icon">📄</span>
+          <div>
+            <div class="file-name" id="dialogFileName">arquivo.blend</div>
+            <div class="file-size" id="dialogFileSize">2.4 MB</div>
+          </div>
+        </div>
+        <div class="field">
+          <label for="dialogName">Nome</label>
+          <input type="text" id="dialogName" placeholder="Nome do asset" />
+        </div>
+        <div class="field">
+          <label for="dialogCategory">Categoria</label>
+          <select id="dialogCategory"></select>
+        </div>
+        <div class="field">
+          <label for="dialogLicense">Licen&ccedil;a</label>
+          <select id="dialogLicense">
+            <option value="cc0">CC0 (Dom&iacute;nio P&uacute;blico)</option>
+            <option value="cc-by">CC BY (Atribui&ccedil;&atilde;o)</option>
+            <option value="cc-by-sa" selected>CC BY-SA (CompartilhaIgual)</option>
+            <option value="cc-by-nc">CC BY-NC (N&atilde;oComercial)</option>
+            <option value="royalty-free">Royalty Free</option>
+          </select>
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button id="dialogCancel">Cancelar</button>
+        <button id="dialogConfirm">Importar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="settingsOverlay">
+    <div id="settingsPanel">
+      <div class="settings-header">
+        <h3>Configurações</h3>
+        <button id="settingsClose">✕</button>
+      </div>
+      <div class="settings-body">
+        <div class="settings-section settings-account" id="settingsAccount">
+          <h4>Minha Conta</h4>
+          <div class="account-info">
+            <div class="account-avatar" id="accountAvatar">J</div>
+            <div class="account-details">
+              <div class="account-name" id="accountName">João</div>
+              <div class="account-email" id="accountEmail">joao@email.com</div>
+            </div>
+          </div>
+          <div class="field">
+            <label for="accountNameInput">Nome</label>
+            <input type="text" id="accountNameInput" />
+          </div>
+          <div class="field">
+            <label for="accountEmailInput">E-mail</label>
+            <input type="email" id="accountEmailInput" />
+          </div>
+          <div class="field">
+            <label for="accountPasswordInput">Nova senha</label>
+            <input type="password" id="accountPasswordInput" placeholder="Deixe em branco para manter" />
+          </div>
+          <div class="account-actions">
+            <button id="accountSaveBtn" class="settings-btn primary">Salvar</button>
+            <button id="accountLogoutBtn" class="settings-btn danger">Sair da conta</button>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h4>Backup de Modelos</h4>
+          <p class="setting-note">Exporte e importe modelos com arquivos binários em Base64.</p>
+          <div class="backup-actions">
+            <button id="exportTxtBtn" class="settings-btn primary">Exportar modelos.txt (metadados)</button>
+            <button id="exportCompletoBtn" class="settings-btn">Exportar completo (Base64)</button>
+            <button id="importTxtBtn" class="settings-btn">Importar modelos.txt</button>
+          </div>
+          <input type="file" id="importTxtInput" hidden accept=".txt" />
+        </div>
+        <div class="settings-section settings-rclone">
+          <h4>Sincronização Rclone</h4>
+          <p class="setting-note">Sincronize automaticamente seus modelos com a nuvem via Rclone ao importar.</p>
+          <div class="field toggle-field">
+            <label class="toggle-row">
+              <span>Ativar sincronização automática</span>
+              <label class="switch">
+                <input type="checkbox" id="rcloneEnabled" />
+                <span class="slider"></span>
+              </label>
+            </label>
+          </div>
+          <div class="field rclone-config-fields">
+            <div class="ludusavi-header-inline">
+              <label style="margin: 0;">Remotes do Rclone</label>
+              <button type="button" id="rcloneRefreshBtn" class="ludusavi-mini-btn" title="Atualizar Lista">🔄 Recarregar</button>
+            </div>
+            <input type="hidden" id="rcloneRemote" value="gdrive" />
+            <div id="rcloneRemotesContainer" class="ludusavi-container">
+              <p class="loading-text">A procurar remotes configurados...</p>
+            </div>
+          </div>
+          <div class="field rclone-config-fields">
+            <label for="rclonePath">Pasta no Remote (opcional)</label>
+            <input type="text" id="rclonePath" placeholder="Ex: Streamline3D/Backups" />
+          </div>
+          <div id="rcloneStatus" class="rclone-status"></div>
+          <div class="rclone-actions">
+            <button id="rcloneTestBtn" class="settings-btn">Testar conexão</button>
+            <button id="syncNowBtn" class="settings-btn primary">Sincronizar agora</button>
+            <button id="rcloneSaveBtn" class="settings-btn">Salvar configuração</button>
+          </div>
+        </div>
+        <div class="settings-section settings-external">
+          <h4>Programas 3D Externos</h4>
+          <p class="setting-note">Configure programas 3D para abrir assets diretamente.</p>
+          <div id="settingsProgramList"></div>
+          <div class="program-add-form">
+            <input type="text" id="programName" placeholder="Nome (ex: Blender)" />
+            <div class="program-path-row">
+              <input type="text" id="programPath" placeholder="Ex: C:\Program Files\Blender Foundation\blender.exe" />
+              <button id="programBrowseBtn" title="Selecionar executável">📁</button>
+            </div>
+            <button id="programAddBtn" class="settings-btn primary" disabled>Adicionar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="colecaoDialogOverlay">
+    <div id="colecaoDialog">
+      <div class="dialog-header">
+        <h3 id="colecaoDialogTitle">Nova Coleção</h3>
+      </div>
+      <div class="dialog-body">
+        <div class="field">
+          <label for="colecaoNome">Nome</label>
+          <input type="text" id="colecaoNome" placeholder="Nome da coleção" />
+        </div>
+        <div class="field">
+          <label for="colecaoDescricao">Descrição</label>
+          <input type="text" id="colecaoDescricao" placeholder="Descrição opcional" />
+        </div>
+        <div class="field">
+          <label for="colecaoCor">Cor</label>
+          <div class="color-picker-row">
+            <input type="color" id="colecaoCor" value="#6C5CE7" />
+            <div class="color-presets">
+              <button class="color-preset" data-cor="#6C5CE7" style="background:#6C5CE7"></button>
+              <button class="color-preset" data-cor="#5B8DEF" style="background:#5B8DEF"></button>
+              <button class="color-preset" data-cor="#4CAF50" style="background:#4CAF50"></button>
+              <button class="color-preset" data-cor="#FF7043" style="background:#FF7043"></button>
+              <button class="color-preset" data-cor="#FFC107" style="background:#FFC107"></button>
+              <button class="color-preset" data-cor="#AB47BC" style="background:#AB47BC"></button>
+              <button class="color-preset" data-cor="#e74c3c" style="background:#e74c3c"></button>
+              <button class="color-preset" data-cor="#1abc9c" style="background:#1abc9c"></button>
+            </div>
+          </div>
+        </div>
+        <input type="hidden" id="colecaoEditId" value="" />
+      </div>
+      <div class="dialog-actions">
+        <button id="colecaoDialogCancel">Cancelar</button>
+        <button id="colecaoDialogConfirm">Criar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="loginDialogOverlay">
+    <div id="loginDialog">
+      <div class="dialog-header">
+        <h3 id="loginDialogTitle">Entrar</h3>
+        <button id="loginClose" class="dialog-close">✕</button>
+      </div>
+      <div class="dialog-body">
+        <div class="field" id="loginUsernameField" style="display:none">
+          <label for="loginUsername">Nome de usuário</label>
+          <input type="text" id="loginUsername" placeholder="Seu nome" />
+        </div>
+        <div class="field">
+          <label for="loginEmail">E-mail</label>
+          <input type="email" id="loginEmail" placeholder="seu@email.com" />
+        </div>
+        <div class="field">
+          <label for="loginPassword">Senha</label>
+          <input type="password" id="loginPassword" placeholder="••••••••" />
+        </div>
+        <div class="field" style="margin-top:-8px">
+          <button id="loginForgotBtn" class="btn-link btn-forgot">Esqueci a senha</button>
+        </div>
+        <div id="loginError" class="login-error" style="display:none"></div>
+        <div id="loginResetMessage" class="login-error login-success" style="display:none"></div>
+        <div class="field" id="loginNewPasswordField" style="display:none">
+          <label for="loginNewPassword">Nova senha</label>
+          <input type="password" id="loginNewPassword" placeholder="Mínimo 6 caracteres" />
+        </div>
+        <div class="field" id="loginNewPasswordConfirmField" style="display:none">
+          <label for="loginNewPasswordConfirm">Confirmar senha</label>
+          <input type="password" id="loginNewPasswordConfirm" placeholder="Repita a nova senha" />
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button id="loginCancel">Cancelar</button>
+        <button id="loginToggleMode" class="btn-link">Criar conta</button>
+        <button id="loginConfirm">Entrar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+ 
+</body>
+</html>
