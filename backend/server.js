@@ -12,7 +12,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = join(__filename, '..');
 
 const app = express();
-const PORT = 3000;
+const PORT = 3001;
 
 app.use(cors({
   origin: true,
@@ -209,11 +209,11 @@ app.post('/api/drive/upload-modelos', (req, res) => {
 });
 
 // ================= ROTA: ATUALIZAR MODELOS.TXT COM O CONTEÚDO DOS MODELOS =================
-app.post('/api/modelos/atualizar-arquivo', express.text({ limit: '500mb', type: 'text/plain' }), (req, res) => {
+app.post('/api/modelos/atualizar-arquivo', (req, res) => {
   try {
-    const conteudoTexto = req.body || '';
-    if (conteudoTexto === '') {
-      // Allow empty content (clearing the file)
+    const { conteudoTexto } = req.body;
+    if (conteudoTexto === undefined) {
+      return res.status(400).json({ error: 'Conteúdo de texto é obrigatório.' });
     }
 
     const filename = join(__dirname, '..', 'modelos.txt');
@@ -228,13 +228,16 @@ app.post('/api/modelos/atualizar-arquivo', express.text({ limit: '500mb', type: 
 
 // ================= ROTA: UPLOAD DE ARQUIVO BINÁRIO =================
 const uploadsDir = join(__dirname, 'uploads');
-try { mkdirSync(uploadsDir, { recursive: true }); } catch (_) {}
 
 app.post('/api/modelos/upload', upload.single('file'), (req, res) => {
   try {
     const { id, extensao } = req.body;
     if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
     if (!id) return res.status(400).json({ error: 'ID do asset é obrigatório.' });
+
+    if (!existsSync(uploadsDir)) {
+      mkdirSync(uploadsDir, { recursive: true });
+    }
 
     const ext = extensao ? (extensao.startsWith('.') ? extensao : '.' + extensao) : '.bin';
     const filePath = join(uploadsDir, `${id}${ext}`);
@@ -353,4 +356,11 @@ app.listen(PORT, () => {
   console.log('✅ Aguardando conversões .blend → .glb...');
   console.log('   Para parar: Ctrl+C');
   console.log('');
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('🔥 UNCAUGHT EXCEPTION:', err);
+});
+process.on('unhandledRejection', (err) => {
+  console.error('🔥 UNHANDLED REJECTION:', err);
 });

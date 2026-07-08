@@ -542,15 +542,36 @@ export const Model = {
     }
   },
 
+  _fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader()
+      r.onload = () => {
+        const partes = r.result.split(',')
+        resolve(partes[1])
+      }
+      r.onerror = reject
+      r.readAsDataURL(file)
+    })
+  },
+
   async exportarModelosParaTexto() {
     let conteudo = ''
     for (const model of this.models) {
-      if (model.importedFile && !model.storagePath) {
-        await this._uploadModelo(model)
-      }
-      if (!model.storagePath) continue
       const ext = model.formato.startsWith('.') ? model.formato : '.' + model.formato
-      conteudo += `id=${model.id} "${model.nome}" P="${ext}"\n`
+
+      let file = model.importedFile
+      if (!file && model.storagePath) {
+        const res = await fetch(model.storagePath)
+        if (!res.ok) throw new Error(`"${model.nome}" indisponível no servidor`)
+        const blob = await res.blob()
+        file = new File([blob], model.nome + ext)
+        model.importedFile = file
+      }
+      if (!file) throw new Error(`"${model.nome}" sem arquivo`)
+
+      const b64 = await this._fileToBase64(file)
+      if (!b64) throw new Error(`Base64 falhou para "${model.nome}"`)
+      conteudo += `"${model.nome}" id=${model.id} P="${ext}" {"${b64}"}\n`
     }
     return conteudo
   },
@@ -563,6 +584,7 @@ export const Model = {
         const nomeMatch = linha.match(/"([^"]+)"/)
         const idMatch = linha.match(/id=([^\s"]+)/)
         const extMatch = linha.match(/P="([^"]+)"/)
+        const base64Match = linha.match(/\{"([^"]+)"\}/)
         if (!nomeMatch) continue
 
         const nome = nomeMatch[1]
@@ -571,6 +593,22 @@ export const Model = {
 
         const grad = this.thumbnailGradients[(this.models.length + imported.length) % this.thumbnailGradients.length]
         const cat = this.guessCategory(ext.replace('.', ''))
+
+        let importedFile = null
+        let storagePath = `http://localhost:3000/api/modelos/download/${id}?ext=${ext}`
+
+        if (base64Match) {
+          const partes = base64Match[1].split(',')
+          const base64Data = partes.length > 1 ? partes[1] : base64Match[1]
+          const byteString = atob(base64Data)
+          const ab = new ArrayBuffer(byteString.length)
+          const ia = new Uint8Array(ab)
+          for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i)
+          }
+          const blob = new Blob([ab])
+          importedFile = new File([blob], nome + ext)
+        }
 
         imported.push({
           id,
@@ -582,8 +620,8 @@ export const Model = {
           disponivelDownload: true,
           animacao: false,
           thumbnailGrad: grad,
-          importedFile: null,
-          storagePath: `http://localhost:3000/api/modelos/download/${id}?ext=${ext}`,
+          importedFile,
+          storagePath,
         })
       } catch (err) {
         console.warn('Linha ignorada:', err)

@@ -122,6 +122,8 @@ export const View = {
     loginMessage: document.getElementById('loginMessage'),
     loginGoogleBtn: document.getElementById('loginGoogleBtn'),
     loginGithubBtn: document.getElementById('loginGithubBtn'),
+    exportCompletoBtn: document.getElementById('exportCompletoBtn'),
+    syncNowBtn: document.getElementById('syncNowBtn'),
   },
 
   showToast(msg, tipo = 'success') {

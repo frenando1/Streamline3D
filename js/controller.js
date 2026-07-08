@@ -140,7 +140,7 @@ const Controller = {
       formData.append('blend', blendFile)
       formData.append('blenderPath', blender.caminho)
 
-      const res = await fetch('http://localhost:3000/api/converter', {
+      const res = await fetch('http://localhost:3001/api/converter', {
         method: 'POST',
         body: formData,
       })
@@ -228,21 +228,23 @@ pause`
 
   async descarregarModeloDoTexto(idModelo) {
     try {
-      View.showToast('Extraindo do modelos.txt... ⏳', 'info')
-      const resposta = await fetch(`http://localhost:3000/api/modelos/baixar/${idModelo}`)
-      if (!resposta.ok) throw new Error('Erro ao baixar do modelos.txt.')
-      const blob = await resposta.blob()
-      const cd = resposta.headers.get('Content-Disposition')
-      let nome = 'asset_restaurado.blend'
-      if (cd?.includes('filename=')) nome = cd.match(/filename="(.+?)"/)?.[1] || nome
-      const url = URL.createObjectURL(blob)
+      View.showToast('Baixando do servidor... ⏳', 'info')
+      const model = Model.models.find(m => m.id === idModelo)
+      if (!model) throw new Error('Modelo não encontrado na lista')
+      let file = model.importedFile
+      if (!file && model.storagePath) {
+        file = await Model.obterArquivoModelo(model)
+      }
+      if (!file) throw new Error('Arquivo não disponível')
+      const ext = model.formato.startsWith('.') ? model.formato : '.' + model.formato
+      const url = URL.createObjectURL(file)
       const link = document.createElement('a')
-      link.href = url; link.download = nome
+      link.href = url; link.download = model.nome + ext
       document.body.appendChild(link); link.click()
       document.body.removeChild(link); URL.revokeObjectURL(url)
       View.showToast('Download concluído! ✅')
     } catch (err) {
-      View.showToast('Erro ao reconstruir o asset.', 'error')
+      View.showToast('Erro ao baixar o arquivo.', 'error')
     }
   },
 
@@ -365,7 +367,7 @@ pause`
       try {
         View.showToast('Sincronizando com Google Drive...', 'loading')
 
-        const initRes = await fetch('http://localhost:3000/api/auth/session-init', {
+        const initRes = await fetch('http://localhost:3001/api/auth/session-init', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: Model.currentUser.id })
@@ -376,7 +378,7 @@ pause`
           Model.salvarConfig()
         }
 
-        const response = await fetch(`http://localhost:3000/api/drive/download/${Model.currentUser.id}`)
+        const response = await fetch(`http://localhost:3001/api/drive/download/${Model.currentUser.id}`)
         const data = await response.json()
 
         if (data.conteudoTexto && data.conteudoTexto.trim() !== '') {
@@ -417,7 +419,7 @@ pause`
     View.el.rcloneStatus.className = 'rclone-status'
     View.el.rcloneStatus.textContent = ''
 
-    return fetch('http://localhost:3000/api/drive/test', {
+    return fetch('http://localhost:3001/api/drive/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -450,19 +452,14 @@ pause`
     console.log('salvarModelosNoDrive: iniciando, models:', Model.models.length)
 
     let textoCompleto
-    try {
-      textoCompleto = await Model.exportarModelosParaTexto()
-    } catch (e) {
-      console.warn('salvarModelosNoDrive: export falhou:', e.message)
-      return
-    }
+    textoCompleto = await Model.exportarModelosParaTexto()
     if (!textoCompleto) return
 
     try {
-      await fetch('http://localhost:3000/api/modelos/atualizar-arquivo', {
+      await fetch('http://localhost:3001/api/modelos/atualizar-arquivo', {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-        body: textoCompleto
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conteudoTexto: textoCompleto })
       })
 
       if (!Model.rcloneConfig.enabled) {
@@ -470,7 +467,7 @@ pause`
         return
       }
 
-      const response = await fetch('http://localhost:3000/api/drive/upload-modelos', {
+      const response = await fetch('http://localhost:3001/api/drive/upload-modelos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: Model.currentUser.id })
@@ -491,7 +488,7 @@ pause`
     try {
       if (!Model.currentUser) return
       View.showToast('Sincronizando modelos.txt no Google Drive... ⏳', 'info')
-      const response = await fetch('http://localhost:3000/api/drive/upload-modelos', {
+      const response = await fetch('http://localhost:3001/api/drive/upload-modelos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: Model.currentUser.id }),
@@ -503,7 +500,7 @@ pause`
 
   async carregarRemotesRclone() {
     try {
-      const res = await fetch('http://localhost:3000/api/drive/remotes');
+      const res = await fetch('http://localhost:3001/api/drive/remotes');
       const data = await res.json();
 
       View.renderRemotesTable(data.remotes || [], Model.rcloneConfig.remote);
@@ -775,9 +772,28 @@ View.el.exportTxtBtn.addEventListener('click', async () => {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
-    View.showToast('modelos.txt baixado!')
+    View.showToast('modelos.txt (metadados) baixado!')
   } catch (err) {
     View.showToast(err.message || 'Erro na exportação', 'error')
+  }
+})
+
+View.el.exportCompletoBtn.addEventListener('click', async () => {
+  try {
+    View.showToast('Exportando modelos com Base64... ⏳', 'info')
+    const texto = await Model.exportarModelosParaTexto()
+    const blob = new Blob([texto], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'modelos_completo.txt'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    View.showToast('modelos_completo.txt baixado! ✅')
+  } catch (err) {
+    View.showToast(err.message || 'Erro na exportação completa', 'error')
   }
 })
 
@@ -895,7 +911,7 @@ View.el.loginConfirm.addEventListener('click', async () => {
       if (result.session) {
         View.updateLoginUI(Model.currentUser)
         try {
-          const initRes = await fetch('http://localhost:3000/api/auth/session-init', {
+          const initRes = await fetch('http://localhost:3001/api/auth/session-init', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId: Model.currentUser.id, email: Model.currentUser.email })
@@ -928,7 +944,7 @@ View.el.loginConfirm.addEventListener('click', async () => {
 
       let initData
       try {
-        const initRes = await fetch('http://localhost:3000/api/auth/session-init', {
+        const initRes = await fetch('http://localhost:3001/api/auth/session-init', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: Model.currentUser.id })
@@ -948,7 +964,7 @@ View.el.loginConfirm.addEventListener('click', async () => {
 
       try {
         if (initData && !initData.needsAuth) {
-          const driveRes = await fetch(`http://localhost:3000/api/drive/download/${Model.currentUser.id}`)
+          const driveRes = await fetch(`http://localhost:3001/api/drive/download/${Model.currentUser.id}`)
           const driveData = await driveRes.json()
           if (driveData.conteudoTexto && driveData.conteudoTexto.trim() !== '') {
             const modelosRecuperados = Model.importarModelosDoTexto(driveData.conteudoTexto)
@@ -979,6 +995,27 @@ View.el.loginForgotBtn.addEventListener('click', () => Controller.handleForgotPa
 View.el.loginDialogOverlay.addEventListener('click', e => {
   if (e.target === View.el.loginDialogOverlay) View.closeLoginDialog()
 })
+
+// Botão "Entrar com email/senha" no overlay OAuth
+const loginEmailLink = document.getElementById('loginEmailLink')
+if (loginEmailLink) {
+  loginEmailLink.addEventListener('click', () => {
+    View.closeLoginOverlay()
+    View.openLoginDialog()
+  })
+}
+
+// Botões OAuth
+if (View.el.loginGoogleBtn) {
+  View.el.loginGoogleBtn.addEventListener('click', () => {
+    Model.signInWithProvider('google').catch(e => View.showToast(e.message, 'error'))
+  })
+}
+if (View.el.loginGithubBtn) {
+  View.el.loginGithubBtn.addEventListener('click', () => {
+    Model.signInWithProvider('github').catch(e => View.showToast(e.message, 'error'))
+  })
+}
 
 View.el.loginPassword.addEventListener('keydown', e => {
   if (e.key === 'Enter') View.el.loginConfirm.click()
@@ -1049,6 +1086,32 @@ View.el.rcloneSaveBtn.addEventListener('click', () => {
 
 View.el.rcloneTestBtn.addEventListener('click', () => Controller.testarRclone())
 
+View.el.syncNowBtn.addEventListener('click', async () => {
+  try {
+    if (!Model.currentUser) { View.showToast('Faça login primeiro', 'error'); return }
+    View.showToast('Exportando e sincronizando com Drive... ⏳', 'info')
+    const texto = await Model.exportarModelosParaTexto()
+    await fetch('http://localhost:3001/api/modelos/atualizar-arquivo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conteudoTexto: texto })
+    })
+    const res = await fetch('http://localhost:3001/api/drive/upload-modelos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: Model.currentUser.id })
+    })
+    const data = await res.json()
+    if (data.success) {
+      View.showToast('Sincronizado com Google Drive! ✅')
+    } else {
+      View.showToast('Falha: ' + (data.error || 'erro desconhecido'), 'error')
+    }
+  } catch (err) {
+    View.showToast(err.message || 'Erro na sincronização', 'error')
+  }
+})
+
 View.el.rcloneRefreshBtn.addEventListener('click', () => Controller.carregarRemotesRclone())
 
 View.el.settingsBtn.addEventListener('click', () => {
@@ -1107,7 +1170,7 @@ supabase.auth.onAuthStateChange(async (event, session) => {
     }
 
     try {
-      const response = await fetch('http://localhost:3000/api/auth/session-init', {
+      const response = await fetch('http://localhost:3001/api/auth/session-init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: session.user.id }),
